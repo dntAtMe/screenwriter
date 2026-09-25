@@ -1,0 +1,18 @@
+[project]
+name = "screenwriter"
+version = "0.1.0"
+description = "A tunable writing app for screenplays, books, ideas and mind maps (Qt/PySide6)"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "pyside6>=6.11.2",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
