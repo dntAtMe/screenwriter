@@ -7,6 +7,7 @@ A project is a plain folder, readable and git-friendly without the app:
       docs/<id>.md          prose and notes (Markdown)
       docs/<id>.fountain    screenplays (Fountain)
       docs/<id>.board.json  boards: mind maps / corkboards (see board.py)
+      snapshots/<id>/       earlier versions of a document (see snapshots.py)
 """
 
 from __future__ import annotations
@@ -16,6 +17,8 @@ import os
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
+
+from .snapshots import SnapshotStore
 
 FORMAT_VERSION = 1
 PROJECT_FILE = "project.json"
@@ -68,6 +71,7 @@ class Project:
         self.name = name
         self.root = root
         self.inbox_id = inbox_id
+        self.snapshots = SnapshotStore(path)
         self._ensure_trash()
 
     @classmethod
@@ -125,6 +129,7 @@ class Project:
         for n in walk([node]):
             if n.is_document:
                 self.doc_path(n).unlink(missing_ok=True)
+                self.snapshots.delete_all(n.id)
 
     def ensure_inbox(self) -> tuple[Node, bool]:
         """The note that quick-captured ideas go to; (node, created)."""

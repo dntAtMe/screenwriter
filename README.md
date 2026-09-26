@@ -43,6 +43,7 @@ Tests: `uv run pytest`
   - Screenplays: industry-format **PDF** (Courier 12pt, standard margins and indents, a title page from Fountain `Title:`/`Author:`/… lines, page numbers, scene headings kept with what follows, `(MORE)`/`(CONT'D)` when dialogue breaks across pages), **Final Draft `.fdx`** and **Fountain**.
   - Prose: one chapter, or a whole folder compiled in binder order, as **PDF**, **Word `.docx`** (standard manuscript format: Times 12pt, double spaced, chapters on new pages) or **Markdown**. `[[notes]]` are left out.
   - Boards: **PNG** or **PDF** image.
+- **Snapshots** (`Ctrl+Alt+S` to take one, `Ctrl+Alt+H` to browse): named versions of a document, plus an automatic one the first time you save it each day. Compare any version with the current text word by word, and restore it; the current text is kept as a snapshot first, and the restore can be undone.
 - **Autosave** shortly after you stop typing, and on tab switch or close. Open tabs are restored per project.
 - **Focus mode** (`Ctrl+Shift+D`), full screen, zoom.
 
@@ -58,6 +59,7 @@ My Story/
   docs/<id>.md          prose and notes
   docs/<id>.fountain    screenplays
   docs/<id>.board.json  boards (cards + links)
+  snapshots/<id>/       earlier versions of each document
 ```
 
 `project.json` also records which note is the Idea Inbox.
@@ -70,4 +72,4 @@ My Story/
 4. ~~Ideas inbox with quick capture, project-wide search~~
 5. ~~Mind map / corkboard canvas~~
 6. ~~Export: screenplay PDF, Final Draft, manuscript PDF/Word/Markdown, board images~~ (EPUB via Pandoc: later)
-7. Snapshots / version history
+7. ~~Snapshots / version history~~

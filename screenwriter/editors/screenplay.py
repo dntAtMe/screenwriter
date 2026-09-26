@@ -286,6 +286,12 @@ class ScreenplayEditor(TextDocumentAPI, QTextEdit):
 
     # --- undo ---------------------------------------------------------------
 
+    def replace_all(self, text: str) -> None:
+        self.history.begin(self.textCursor().position())
+        super().replace_all(text)
+        self.history.end(0)
+        self._full_refresh()
+
     def can_undo(self) -> bool:
         return self.history.can_undo()
 

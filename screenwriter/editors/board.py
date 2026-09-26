@@ -348,6 +348,11 @@ class BoardEditor(QGraphicsView):
     def selected_text(self) -> str:
         return ""
 
+    def replace_all(self, text: str) -> None:
+        self._finish_editing()
+        self._load(Board.from_json(text))
+        self.commit()
+
     def zoom(self, steps: int) -> None:
         factor = 1.15 ** steps
         scale = self.transform().m11() * factor

@@ -1,3 +1,4 @@
+from datetime import date
 from pathlib import Path
 
 from PySide6.QtCore import QSettings, Qt, QTimer
@@ -21,6 +22,8 @@ from PySide6.QtWidgets import (
 from .binder import Binder
 from .capture import QuickCapture, append_idea, format_idea
 from .exportdialog import run_export
+from .snapshotdialog import SnapshotsDialog
+from .snapshots import AUTO_NAME
 from . import board
 from .editors.board import BoardEditor
 from .outline import OutlinePanel
@@ -166,6 +169,8 @@ class MainWindow(QMainWindow):
         self.project_actions = [
             self._action(file, "Save", self.save_all, QKeySequence.StandardKey.Save),
             self._action(file, "Export…", self.export_current, "Ctrl+E"),
+            self._action(file, "Take Snapshot…", self.take_snapshot, "Ctrl+Alt+S"),
+            self._action(file, "Snapshots…", self.show_snapshots, "Ctrl+Alt+H"),
             self._action(file, "Close Tab", lambda: self.close_tab(self.tabs.currentIndex()), "Ctrl+W"),
             self._action(file, "Close Project", self._close_project_from_menu),
         ]
@@ -343,8 +348,54 @@ class MainWindow(QMainWindow):
             if editor.is_modified():
                 node = self.project.find(node_id)
                 if node:
+                    self._daily_snapshot(node)
                     self.project.write_text(node, editor.text())
                 editor.mark_saved()
+
+    # --- snapshots --------------------------------------------------------------
+
+    def _daily_snapshot(self, node) -> None:
+        """Before the first save of the day, keep the version on disk."""
+        store = self.project.snapshots
+        previous = self.project.read_text(node)
+        if previous.strip() and not store.has_snapshot_on(node.id, date.today()):
+            store.take(node.id, previous, self.project.doc_path(node).suffix, AUTO_NAME)
+
+    def _current_node(self):
+        editor = self.tabs.currentWidget()
+        return self.project.find(editor.node_id) if editor and self.project else None
+
+    def take_snapshot(self, name: str | None = None) -> None:
+        node = self._current_node()
+        if node is None:
+            return
+        if name is None:
+            name, ok = QInputDialog.getText(self, "Take Snapshot", f"Snapshot of “{node.title}”. Name (optional):")
+            if not ok:
+                return
+        self.project.snapshots.take(node.id, self._text_of(node), self.project.doc_path(node).suffix, name.strip())
+        self.statusBar().showMessage(f"Snapshot of “{node.title}” taken", 3000)
+
+    def restore_snapshot(self, node, text: str) -> None:
+        self.open_document(node.id)
+        editor = self.editors[node.id]
+        self.project.snapshots.take(node.id, editor.text(), self.project.doc_path(node).suffix, "Before restore")
+        editor.replace_all(text)
+        self.save_all()
+
+    def show_snapshots(self) -> None:
+        node = self._current_node()
+        if node is None:
+            return
+        self.save_all()
+        readable = (lambda t: board.search_text(t)) if node.kind == BOARD else (lambda t: t)
+        SnapshotsDialog(
+            self.project.snapshots, node.id, node.title,
+            current_text=lambda: self._text_of(node),
+            take=lambda name: self.take_snapshot(name),
+            restore=lambda text: self.restore_snapshot(node, text),
+            readable=readable, parent=self,
+        ).exec()
 
     def close_tab(self, index: int) -> None:
         if index >= 0:

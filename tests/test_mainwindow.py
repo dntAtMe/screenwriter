@@ -98,3 +98,47 @@ def test_board_document(window):
 def test_find_bar_ignores_board(window):
     window.open_document("storymap")
     assert window._current_text_editor() is None
+
+
+def test_daily_snapshot_and_restore(window):
+    from datetime import date
+
+    from screenwriter.snapshots import AUTO_NAME
+
+    store = window.project.snapshots
+    window.open_document("ch02")
+    editor = window.editors["ch02"]
+    original = editor.text()
+    editor.replace_all(original + "\nMore fog.")
+    window.save_all()
+    snaps = store.list("ch02")
+    assert [s.name for s in snaps] == [AUTO_NAME] and snaps[0].text() == original
+    editor.replace_all(original + "\nEven more fog.")
+    window.save_all()
+    assert len(store.list("ch02")) == 1  # one automatic snapshot per day
+
+    window.take_snapshot("Draft 2")
+    window.restore_snapshot(window.project.find("ch02"), original)
+    assert editor.text() == original
+    assert window.project.read_text(window.project.find("ch02")) == original
+    assert [s.name for s in store.list("ch02")][:2] == ["Before restore", "Draft 2"]
+    editor.undo()
+    assert editor.text().endswith("Even more fog.")
+
+
+def test_restore_board_and_screenplay_are_undoable(window):
+    for node_id in ("storymap", "pilot"):
+        window.open_document(node_id)
+        editor = window.editors[node_id]
+        before = editor.text()
+        window.restore_snapshot(window.project.find(node_id), window.project.read_text(window.project.find(node_id)).replace("Mara", "Maura"))
+        assert "Maura" in editor.text()
+        editor.undo()
+        assert editor.text() == before
+
+
+def test_permanent_delete_removes_snapshots(window):
+    node = window.project.find("ch02")
+    window.project.snapshots.take("ch02", "x", ".md")
+    window.project.delete_files(node)
+    assert window.project.snapshots.list("ch02") == []

@@ -45,6 +45,14 @@ class TextDocumentAPI:
     def current_line(self) -> int:
         return self.textCursor().blockNumber()
 
+    def replace_all(self, text: str) -> None:
+        """Replace the whole document as one undoable edit (restoring a snapshot)."""
+        cursor = QTextCursor(self.document())
+        cursor.beginEditBlock()
+        cursor.select(QTextCursor.SelectionType.Document)
+        cursor.insertText(text)
+        cursor.endEditBlock()
+
     def selected_text(self) -> str:
         text = self.textCursor().selectedText()
         return "" if "\u2029" in text else text  # no multi-line selections
