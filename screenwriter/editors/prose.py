@@ -78,6 +78,12 @@ class ProseEditor(QPlainTextEdit):
     def text(self) -> str:
         return self.toPlainText()
 
+    def is_modified(self) -> bool:
+        return self.document().isModified()
+
+    def mark_saved(self) -> None:
+        self.document().setModified(False)
+
     def stats(self) -> str:
         cursor = self.textCursor()
         words = word_count(self.toPlainText())

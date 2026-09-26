@@ -5,19 +5,25 @@ The file on disk is plain Fountain text. While editing, each line is classified
 indents it like a printed screenplay page.
 
 Keys:
-  Tab          on a new line after a blank: start a CHARACTER cue (auto caps)
-               on an empty line inside dialogue: insert a (parenthetical)
-               on a line with text after a blank: turn it into a CHARACTER cue
-  Enter        after action / dialogue / scene heading: new paragraph (blank line)
-               after a character cue or parenthetical: continue with dialogue
-  Shift+Enter  plain line break
+  Tab              new line after a blank: start a CHARACTER cue (auto caps)
+                   empty line in dialogue: insert a (parenthetical)
+                   line with text after a blank: turn it into a CHARACTER cue
+  Enter            after action / dialogue / scene heading: new paragraph
+                   after a character cue or parenthetical: continue with dialogue
+  Shift+Enter      plain line break
+  Ctrl+1 … Ctrl+6  make the line a Scene Heading, Action, Character,
+                   Parenthetical, Dialogue or Transition
+
+As you type:
+  int / ext / i/e + space or "."   becomes INT. / EXT. / INT./EXT.
+  cut to / fade out / dissolve to  becomes a transition when you press Enter
+  scene headings and transitions   are capitalised
+  character names, locations and times of day are offered for completion
 """
 
 import math
-import re
-from enum import IntEnum
 
-from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtCore import QStringListModel, Qt, QTimer, Signal
 from PySide6.QtGui import (
     QColor,
     QFont,
@@ -28,43 +34,17 @@ from PySide6.QtGui import (
     QTextCharFormat,
     QTextCursor,
 )
-from PySide6.QtWidgets import QFrame, QTextEdit
+from PySide6.QtWidgets import QCompleter, QFrame, QTextEdit
 
+import re
+
+from .. import fountain
+from ..fountain import AFTER_BREAK, EL_NAMES, IN_DIALOGUE, SCENE_PREFIXES, SCENE_RE, El, classify
+from .history import TextHistory
 from .common import center_column, first_available_font, paint_margins_as_page, word_count
 
 PAGE_CHARS = 60  # 6" of Courier 12pt at 10 characters per inch
 LINES_PER_PAGE = 55
-
-
-class El(IntEnum):
-    BLANK = 0
-    ACTION = 1
-    SCENE = 2
-    CHARACTER = 3
-    PARENTHETICAL = 4
-    DIALOGUE = 5
-    DIALOGUE_PENDING = 6  # empty line right after a cue: laid out as dialogue, behaves as blank
-    TRANSITION = 7
-    CENTERED = 8
-    SECTION = 9
-    SYNOPSIS = 10
-    NOTE = 11
-
-
-EL_NAMES = {
-    El.BLANK: "",
-    El.ACTION: "Action",
-    El.SCENE: "Scene Heading",
-    El.CHARACTER: "Character",
-    El.PARENTHETICAL: "Parenthetical",
-    El.DIALOGUE: "Dialogue",
-    El.DIALOGUE_PENDING: "Dialogue",
-    El.TRANSITION: "Transition",
-    El.CENTERED: "Centered",
-    El.SECTION: "Section",
-    El.SYNOPSIS: "Synopsis",
-    El.NOTE: "Note",
-}
 
 # (left indent, right indent) in characters, within the 60-character page line
 INDENTS = {
@@ -74,47 +54,10 @@ INDENTS = {
     El.DIALOGUE_PENDING: (10, 15),
 }
 ALIGN = {El.TRANSITION: Qt.AlignmentFlag.AlignRight, El.CENTERED: Qt.AlignmentFlag.AlignHCenter}
+FORCED_MARKERS = ".!@>"
 
-SCENE_RE = re.compile(r"^(INT|EXT|EST|INT\.?/EXT|I/E)[.\s]", re.IGNORECASE)
-IN_DIALOGUE = (El.CHARACTER, El.PARENTHETICAL, El.DIALOGUE)
-
-
-EXTENSION_RE = re.compile(r"\s*\([^()]*\)\s*\^?$")  # MARA (V.O.)  /  MARA (cont'd) ^
-
-
-def _is_caps(s: str) -> bool:
-    """All-caps line, allowing a trailing (extension) in any case: a character cue."""
-    name = EXTENSION_RE.sub("", s).rstrip("^ ")
-    return any(c.isalpha() for c in name) and name == name.upper() and "(" not in name
-
-
-def classify(text: str, prev: int) -> El:
-    s = text.strip()
-    if prev in IN_DIALOGUE:
-        if not s:
-            return El.DIALOGUE_PENDING if prev in (El.CHARACTER, El.PARENTHETICAL) else El.BLANK
-        return El.PARENTHETICAL if s.startswith("(") else El.DIALOGUE
-    if not s:
-        return El.BLANK
-    if s.startswith("#"):
-        return El.SECTION
-    if s.startswith("=") and not s.startswith("==="):
-        return El.SYNOPSIS
-    if s.startswith("[[") and s.endswith("]]"):
-        return El.NOTE
-    if s.startswith(">"):
-        return El.CENTERED if s.endswith("<") else El.TRANSITION
-    after_break = prev in (-1, El.BLANK, El.DIALOGUE_PENDING)
-    if after_break:
-        if s.startswith("!"):
-            return El.ACTION
-        if (s.startswith(".") and not s.startswith("..")) or SCENE_RE.match(s):
-            return El.SCENE
-        if s.startswith("@"):
-            return El.CHARACTER
-        if _is_caps(s):
-            return El.TRANSITION if s.endswith("TO:") else El.CHARACTER
-    return El.ACTION
+# Elements that can be picked explicitly (Format menu / Ctrl+1…6)
+SETTABLE = [El.SCENE, El.ACTION, El.CHARACTER, El.PARENTHETICAL, El.DIALOGUE, El.TRANSITION]
 
 
 def _fmt(*, bold=False, italic=False, underline=False, color=None) -> QTextCharFormat:
@@ -143,10 +86,26 @@ class FountainHighlighter(QSyntaxHighlighter):
         (re.compile(r"(?<!\w)_[^_\s][^_]*_(?!\w)"), _fmt(underline=True)),
         (re.compile(r"\[\[.*?\]\]"), _fmt(italic=True, color=GREY)),
     ]
-    FORCED_MARKERS = ".!@>"
+
+    def __init__(self, editor: "ScreenplayEditor"):
+        super().__init__(editor.document())
+        self.editor = editor
 
     def highlightBlock(self, text: str) -> None:
-        el = classify(text, self.previousBlockState())
+        block = self.currentBlock()
+        number = block.blockNumber()
+        cursor_block = self.editor.textCursor().blockNumber()
+        nxt = block.next()
+        next_text = nxt.text() if nxt.isValid() else None
+        if nxt.isValid() and nxt.blockNumber() == cursor_block and not next_text.strip():
+            next_text = "…"  # the writer is about to type this cue's dialogue
+        el = classify(
+            text,
+            self.previousBlockState(),
+            next_text,
+            editing=number == cursor_block,
+            forced_cue=number == self.editor.cue_block,
+        )
         self.setCurrentBlockState(int(el))
         if el in self.ELEMENT_FORMATS:
             self.setFormat(0, len(text), self.ELEMENT_FORMATS[el])
@@ -154,7 +113,7 @@ class FountainHighlighter(QSyntaxHighlighter):
             for m in regex.finditer(text):
                 self.setFormat(m.start(), m.end() - m.start(), fmt)
         stripped = text.lstrip()
-        if stripped[:1] in self.FORCED_MARKERS and el not in (El.DIALOGUE, El.PARENTHETICAL):
+        if stripped[:1] in FORCED_MARKERS and el not in (El.DIALOGUE, El.PARENTHETICAL):
             self.setFormat(len(text) - len(stripped), 1, _fmt(color=self.GREY))
 
 
@@ -173,26 +132,62 @@ class ScreenplayEditor(QTextEdit):
         self.document().setDefaultFont(font)
         paint_margins_as_page(self)
 
-        self.highlighter = FountainHighlighter(self.document())
+        self.document().setUndoRedoEnabled(False)  # see history.py
+        self.history = TextHistory()
+        self._replaying = False
+        self.cue_block = -1      # block number in "character cue" mode after Tab
+        self._cursor_block = 0
         self._applying = False
-        self._caps_block = -1  # block number in "CHARACTER cue" mode after Tab
+        self.highlighter = FountainHighlighter(self)
 
+        # Edits that don't come through keyPressEvent (paste, drop, undo) get a full refresh.
+        self._refresh_timer = QTimer(self, singleShot=True, interval=0)
+        self._refresh_timer.timeout.connect(self._full_refresh)
+        self.document().contentsChange.connect(self._on_contents_change)
         self._layout_timer = QTimer(self, singleShot=True, interval=0)
         self._layout_timer.timeout.connect(self._apply_layout)
-        self.document().contentsChanged.connect(self._layout_timer.start)
+
         self.textChanged.connect(self.statsChanged)
         self.cursorPositionChanged.connect(self._on_cursor_moved)
+
+        self.completer = QCompleter(self)
+        self.completer.setWidget(self)
+        self.completer.setCompletionMode(QCompleter.CompletionMode.PopupCompletion)
+        self.completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        self.completer.setModel(QStringListModel(self.completer))
+        self.completer.activated[str].connect(self._insert_completion)
+        self._completion_kind = None
 
     # --- content ------------------------------------------------------------
 
     def set_text(self, text: str) -> None:
+        self._replaying = True
         self.setPlainText(text)
-        self._apply_layout()
-        self.document().clearUndoRedoStacks()
-        self.document().setModified(False)
+        self._replaying = False
+        self.history.reset(self.toPlainText())
+        self._saved_text = self.history.text
+        self._full_refresh()
 
     def text(self) -> str:
         return self.toPlainText()
+
+    def is_modified(self) -> bool:
+        # Not document().isModified(): with Qt's undo off, restyling sets that flag too.
+        return self.history.text != self._saved_text
+
+    def mark_saved(self) -> None:
+        self._saved_text = self.history.text
+
+    def lines(self) -> list[tuple[str, El]]:
+        """Every line with its element, as currently shown."""
+        out, block = [], self.document().begin()
+        while block.isValid():
+            out.append((block.text(), self._element(block)))
+            block = block.next()
+        return out
+
+    def outline(self) -> list[fountain.OutlineItem]:
+        return fountain.outline(self.lines())
 
     def stats(self) -> str:
         pages = self.page_estimate()
@@ -202,20 +197,47 @@ class ScreenplayEditor(QTextEdit):
         lines = 0
         block = self.document().begin()
         while block.isValid():
-            left, right = INDENTS.get(El(max(block.userState(), 0)), (0, 0))
-            width = PAGE_CHARS - left - right
-            lines += max(1, math.ceil(len(block.text()) / width))
+            left, right = INDENTS.get(self._element(block), (0, 0))
+            lines += max(1, math.ceil(len(block.text()) / (PAGE_CHARS - left - right)))
             block = block.next()
         return max(1, round(lines / LINES_PER_PAGE))
 
-    # --- layout -------------------------------------------------------------
+    def current_element(self) -> El:
+        return self._element(self.textCursor().block())
+
+    # --- classification & layout ----------------------------------------------
+
+    @staticmethod
+    def _element(block) -> El:
+        return El(max(block.userState(), 0))
+
+    def _on_contents_change(self, pos, removed, added) -> None:
+        if self._replaying or self._applying:  # undo/redo, or our layout pass (formats only)
+            return
+        self.history.record(self.toPlainText(), self.textCursor().position(), (pos, removed, added))
+        self._refresh_timer.start()
+
+    def _full_refresh(self) -> None:
+        self.highlighter.rehighlight()
+        self._apply_layout()
+
+    def _refresh_blocks(self, *numbers: int) -> None:
+        """Re-classify blocks whose element depends on the cursor or on the next line."""
+        doc = self.document()
+        for n in sorted(set(numbers)):
+            block = doc.findBlockByNumber(n)
+            if block.isValid():
+                self.highlighter.rehighlightBlock(block)
+
+    def _refresh_around_cursor(self) -> None:
+        n = self.textCursor().blockNumber()
+        self._refresh_blocks(n - 1, n)
 
     def _char_width(self) -> float:
         return QFontMetricsF(self.document().defaultFont()).horizontalAdvance("M")
 
     def _apply_layout(self) -> None:
-        """Indent every block according to its element. This records its own
-        format-only undo step, which undo()/redo() below step over."""
+        """Indent every block according to its element."""
         if self._applying:
             return
         self._applying = True
@@ -223,7 +245,7 @@ class ScreenplayEditor(QTextEdit):
         cursor = None
         block = self.document().begin()
         while block.isValid():
-            el = El(max(block.userState(), 0))
+            el = self._element(block)
             left, right = INDENTS.get(el, (0, 0))
             align = ALIGN.get(el, Qt.AlignmentFlag.AlignLeft)
             fmt = block.blockFormat()
@@ -263,57 +285,79 @@ class ScreenplayEditor(QTextEdit):
 
     # --- undo ---------------------------------------------------------------
 
+    def can_undo(self) -> bool:
+        return self.history.can_undo()
+
+    def can_redo(self) -> bool:
+        return self.history.can_redo()
+
     def undo(self) -> None:
-        """Undo back to the previous *text* state, skipping layout-only steps.
-        That state's layout was already applied, so no new step is recorded
-        and the redo stack stays intact."""
-        doc, cursor = self.document(), self.textCursor()
-        text = doc.toPlainText()
-        self._applying = True
-        while doc.isUndoAvailable():
-            doc.undo(cursor)
-            if doc.toPlainText() != text:
-                break
-        self._applying = False
-        self.setTextCursor(cursor)
+        if step := self.history.pop_undo():
+            self._replay([(e.pos, e.added, e.removed) for e in reversed(step.edits)], step.cursor_before)
 
     def redo(self) -> None:
-        """Redo one text change plus the layout step recorded right after it."""
-        doc, cursor = self.document(), self.textCursor()
-        text = doc.toPlainText()
-        self._applying = True
-        while doc.isRedoAvailable():
-            doc.redo(cursor)
-            if doc.toPlainText() != text:
-                break
-        while doc.isRedoAvailable():
-            before = doc.toPlainText()
-            doc.redo(cursor)
-            if doc.toPlainText() != before:
-                doc.undo(cursor)
-                break
-        self._applying = False
+        if step := self.history.pop_redo():
+            self._replay([(e.pos, e.removed, e.added) for e in step.edits], step.cursor_after)
+
+    def _replay(self, edits: list[tuple[int, str, str]], cursor_pos: int) -> None:
+        """Apply (pos, old, new) replacements without recording them."""
+        self._replaying = True
+        cursor = QTextCursor(self.document())
+        cursor.beginEditBlock()
+        for pos, old, new in edits:
+            cursor.setPosition(pos)
+            cursor.setPosition(pos + len(old), QTextCursor.MoveMode.KeepAnchor)
+            cursor.insertText(new)
+        cursor.endEditBlock()
+        self.history.text = self.toPlainText()
+        cursor.setPosition(min(cursor_pos, len(self.history.text)))
         self.setTextCursor(cursor)
+        self._replaying = False
+        self.cue_block = -1
+        self._full_refresh()
+        self.ensureCursorVisible()
+
+    # --- cursor ---------------------------------------------------------------
+
+    def _on_cursor_moved(self) -> None:
+        n = self.textCursor().blockNumber()
+        if n != self._cursor_block:
+            old = self._cursor_block
+            self._cursor_block = n
+            if n != self.cue_block:
+                self.cue_block = -1
+            # Cue detection depends on which line holds the cursor.
+            self._refresh_blocks(old - 1, old, n - 1, n)
+            self._layout_timer.start()
+            self.completer.popup().hide()
+        self.elementChanged.emit(EL_NAMES[self.current_element()])
+        self.statsChanged.emit()
 
     # --- keys ---------------------------------------------------------------
 
-    def _element(self, block) -> El:
-        return El(max(block.userState(), 0))
-
-    def _on_cursor_moved(self) -> None:
-        block = self.textCursor().block()
-        if block.blockNumber() != self._caps_block:
-            self._caps_block = -1
-        name = "Character" if self._caps_block >= 0 else EL_NAMES[self._element(block)]
-        self.elementChanged.emit(name)
-        self.statsChanged.emit()
-
     def keyPressEvent(self, e):
-        self._handle_key(e)
-        # Lay out right away so every text step is directly followed by its own
-        # layout step (undo/redo rely on that); the timer covers paste, drop, etc.
+        popup = self.completer.popup()
+        if popup.isVisible() and e.key() in (
+            Qt.Key.Key_Enter, Qt.Key.Key_Return, Qt.Key.Key_Escape, Qt.Key.Key_Tab, Qt.Key.Key_Backtab,
+        ):
+            e.ignore()  # the completer handles these
+            return
+        self.history.begin(self.textCursor().position())
+        try:
+            self._handle_key(e)
+        finally:
+            self.history.end(self.textCursor().position())
+        # Classify and lay out right away so every text step is directly followed
+        # by its own layout step (undo/redo rely on that).
+        self._refresh_timer.stop()
         self._layout_timer.stop()
+        self._refresh_around_cursor()
         self._apply_layout()
+        self.elementChanged.emit(EL_NAMES[self.current_element()])
+        if e.text() and (e.text().isprintable() or e.key() == Qt.Key.Key_Backspace):
+            self._update_completion()
+        else:
+            popup.hide()
 
     def _handle_key(self, e):
         key, mods = e.key(), e.modifiers()
@@ -321,53 +365,95 @@ class ScreenplayEditor(QTextEdit):
         block = cursor.block()
         el = self._element(block)
         plain = not (mods & ~Qt.KeyboardModifier.KeypadModifier)
+        is_enter = key in (Qt.Key.Key_Return, Qt.Key.Key_Enter)
+        after_break = self._prev_element(block) in AFTER_BREAK
 
         if e.matches(QKeySequence.StandardKey.Undo):
-            self.undo()
-            return
+            return self.undo()
         if e.matches(QKeySequence.StandardKey.Redo):
-            self.redo()
-            return
+            return self.redo()
 
-        if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter) and mods & Qt.KeyboardModifier.ShiftModifier:
+        if is_enter and mods & Qt.KeyboardModifier.ShiftModifier:
             cursor.insertBlock()  # a real line break, not QTextEdit's soft U+2028 separator
-            self.setTextCursor(cursor)
-            return
+            return self.setTextCursor(cursor)
 
         if key == Qt.Key.Key_Tab and plain:
-            self._tab(cursor)
-            return
-
-        if key in (Qt.Key.Key_Return, Qt.Key.Key_Enter) and plain and cursor.atBlockEnd() and block.text().strip():
-            if el in (El.SCENE, El.TRANSITION):
-                self._uppercase_block(cursor)
-            if el in (El.ACTION, El.SCENE, El.TRANSITION, El.CENTERED, El.DIALOGUE):
-                next_blank = block.next().isValid() and not block.next().text().strip()
-                cursor.insertText("\n" if next_blank else "\n\n")
-                if next_blank:
-                    cursor.movePosition(QTextCursor.MoveOperation.NextBlock)
-                self.setTextCursor(cursor)
-                self.ensureCursorVisible()
-                return
-            if el in (El.CHARACTER, El.PARENTHETICAL):
-                self._caps_block = -1
-                cursor.insertText("\n")
-                self.setTextCursor(cursor)
-                return
+            return self._tab(cursor)
 
         text = e.text()
-        auto_caps = block.blockNumber() == self._caps_block or el in (El.SCENE, El.TRANSITION)
+        at_end = cursor.atBlockEnd() and not cursor.hasSelection()
+
+        # "int" + space/"." -> "INT. "
+        if text in (" ", ".") and at_end and after_break and block.text().strip().lower() in SCENE_PREFIXES:
+            self._replace_block_text(cursor, SCENE_PREFIXES[block.text().strip().lower()] + " ")
+            return
+
+        # No double spaces in headings ("INT." + space after the auto-expansion).
+        if text == " " and el == El.SCENE and not cursor.hasSelection() and block.text()[cursor.positionInBlock() - 1 : cursor.positionInBlock()] == " ":
+            return
+
+        # Parentheticals close themselves.
+        if text == "(" and at_end and not block.text().strip() and self._prev_element(block) in IN_DIALOGUE:
+            cursor.insertText("()")
+            cursor.movePosition(QTextCursor.MoveOperation.Left)
+            return self.setTextCursor(cursor)
+        if text == ")" and not cursor.hasSelection() and self._char_after(cursor) == ")":
+            cursor.movePosition(QTextCursor.MoveOperation.Right)
+            return self.setTextCursor(cursor)
+
+        if is_enter and plain and at_end and block.text().strip():
+            stripped = block.text().strip()
+            if after_break and fountain.TYPED_TRANSITION_RE.match(stripped):
+                self._replace_block_text(cursor, fountain.normalize_transition(stripped))
+                el = El.TRANSITION if not stripped.lower().startswith("fade in") else El.ACTION
+            elif el in (El.SCENE, El.TRANSITION):
+                self._replace_block_text(cursor, block.text().upper())
+            if el in (El.ACTION, El.SCENE, El.TRANSITION, El.CENTERED, El.DIALOGUE):
+                return self._new_paragraph(cursor)
+            if el in (El.CHARACTER, El.PARENTHETICAL):
+                self.cue_block = -1
+                cursor.insertText("\n")
+                return self.setTextCursor(cursor)
+
+        auto_caps = block.blockNumber() == self.cue_block or el in (El.SCENE, El.TRANSITION)
+        if "(" in block.text()[: cursor.positionInBlock()]:
+            auto_caps = False  # (cont'd) and friends may stay lowercase
         if auto_caps and text and text.isprintable() and text != text.upper() and not (mods & Qt.KeyboardModifier.ControlModifier):
             cursor.insertText(text.upper())
-            self.setTextCursor(cursor)
-            return
+            return self.setTextCursor(cursor)
 
         super().keyPressEvent(e)
 
+    def _prev_element(self, block) -> int:
+        prev = block.previous()
+        return self._element(prev) if prev.isValid() else -1
+
+    @staticmethod
+    def _char_after(cursor: QTextCursor) -> str:
+        text, pos = cursor.block().text(), cursor.positionInBlock()
+        return text[pos] if pos < len(text) else ""
+
+    def _new_paragraph(self, cursor: QTextCursor) -> None:
+        block = cursor.block()
+        next_blank = block.next().isValid() and not block.next().text().strip()
+        cursor.insertText("\n" if next_blank else "\n\n")
+        if next_blank:
+            cursor.movePosition(QTextCursor.MoveOperation.NextBlock)
+        self.setTextCursor(cursor)
+        self.ensureCursorVisible()
+
+    def _replace_block_text(self, cursor: QTextCursor, text: str) -> None:
+        """Replace the current line, leaving the cursor at its end."""
+        if cursor.block().text() == text:
+            return
+        cursor.movePosition(QTextCursor.MoveOperation.StartOfBlock)
+        cursor.movePosition(QTextCursor.MoveOperation.EndOfBlock, QTextCursor.MoveMode.KeepAnchor)
+        cursor.insertText(text)
+        self.setTextCursor(cursor)
+
     def _tab(self, cursor: QTextCursor) -> None:
         block = cursor.block()
-        prev = block.previous()
-        prev_el = self._element(prev) if prev.isValid() else El.BLANK
+        prev_el = self._prev_element(block)
         text = block.text()
 
         if prev_el in IN_DIALOGUE:
@@ -377,18 +463,153 @@ class ScreenplayEditor(QTextEdit):
                 self.setTextCursor(cursor)
             return
 
-        if prev_el in (El.BLANK, El.DIALOGUE_PENDING) or not prev.isValid():
+        if prev_el in AFTER_BREAK:
             if text.strip():
-                self._uppercase_block(cursor)
-            self._caps_block = block.blockNumber()
-            self.elementChanged.emit("Character")
+                pos = cursor.position()
+                self._replace_block_text(cursor, text.upper())
+                cursor.setPosition(pos)
+                self.setTextCursor(cursor)
+            self.cue_block = block.blockNumber()
 
-    def _uppercase_block(self, cursor: QTextCursor) -> None:
-        pos = cursor.position()
-        cursor.movePosition(QTextCursor.MoveOperation.StartOfBlock)
-        cursor.movePosition(QTextCursor.MoveOperation.EndOfBlock, QTextCursor.MoveMode.KeepAnchor)
-        upper = cursor.selectedText().upper()
-        if upper != cursor.selectedText():
-            cursor.insertText(upper)
-        cursor.setPosition(pos)
+    # --- explicit element changes ------------------------------------------------
+
+    def set_element(self, el: El) -> None:
+        """Rewrite the current line so Fountain reads it as `el` (Ctrl+1…6)."""
+        cursor = self.textCursor()
+        block = cursor.block()
+        body = block.text().strip()
+        if body[:1] in FORCED_MARKERS and not body.startswith(".."):
+            body = body[1:].lstrip()
+        body = body.rstrip("<").rstrip()
+        if el != El.PARENTHETICAL and body.startswith("(") and body.endswith(")"):
+            body = body[1:-1]
+
+        self.history.begin(cursor.position())
+        cursor.beginEditBlock()
+        if el == El.SCENE:
+            body = body.upper()
+            text = body if SCENE_RE.match(body) else ("." + body if body else "INT. ")
+            self._ensure_blank_before(cursor)
+        elif el == El.ACTION:
+            forced = body and (fountain.is_caps(body) or SCENE_RE.match(body) or body[0] in "#=[>")
+            text = "!" + body if forced else body
+        elif el == El.CHARACTER:
+            text = body.upper()
+            self._ensure_blank_before(cursor)
+        elif el == El.PARENTHETICAL:
+            inner = body.strip("()")
+            text = f"({inner})"
+            self._join_with_dialogue_above(cursor)
+        elif el == El.DIALOGUE:
+            text = body
+            self._join_with_dialogue_above(cursor)
+        elif el == El.TRANSITION:
+            body = body.upper()
+            text = body if body.endswith("TO:") or body in ("FADE OUT.", "FADE TO BLACK.") else "> " + body
+            self._ensure_blank_before(cursor)
+        else:
+            text = body
+        self._replace_block_text(cursor, text)
+        if el == El.PARENTHETICAL:
+            cursor.movePosition(QTextCursor.MoveOperation.Left)
+        cursor.endEditBlock()
         self.setTextCursor(cursor)
+        self.history.end(cursor.position())
+        self.cue_block = cursor.blockNumber() if el == El.CHARACTER and not body else -1
+        self._refresh_around_cursor()
+        self._full_refresh()
+
+    def _ensure_blank_before(self, cursor: QTextCursor) -> None:
+        prev = cursor.block().previous()
+        if prev.isValid() and prev.text().strip():
+            c = QTextCursor(cursor.block())
+            c.insertBlock()
+
+    def _join_with_dialogue_above(self, cursor: QTextCursor) -> None:
+        """Dialogue can't follow a blank line: remove blanks between it and a cue above."""
+        block = cursor.block()
+        above = block.previous()
+        while above.isValid() and not above.text().strip():
+            above = above.previous()
+        if not above.isValid() or above.blockNumber() == block.blockNumber() - 1:
+            return
+        if fountain.is_caps(above.text().strip()) or self._element(above) in (El.PARENTHETICAL, El.DIALOGUE):
+            c = QTextCursor(self.document())
+            c.setPosition(above.position() + above.length() - 1)
+            c.setPosition(block.position() - 1, QTextCursor.MoveMode.KeepAnchor)
+            c.removeSelectedText()
+
+    # --- completion -------------------------------------------------------------
+
+    def _completion_context(self) -> tuple[str, list[str], str] | None:
+        """(kind, candidates, prefix) for the line under the cursor, or None."""
+        cursor = self.textCursor()
+        block = cursor.block()
+        if not cursor.atBlockEnd():
+            return None
+        text = block.text()
+        el = self._element(block)
+        lines = self.lines()
+        if el == El.CHARACTER or block.blockNumber() == self.cue_block:
+            prefix = text.lstrip("@")
+            if "(" in prefix:
+                ext = prefix.rsplit("(", 1)[1]
+                return "extension", fountain.CUE_EXTENSIONS, ext
+            names = [n for n, _ in fountain.characters(lines).most_common()]
+            return "character", names, prefix
+        if el == El.SCENE:
+            if " - " in text:
+                return "time", fountain.times_of_day(lines), text.rsplit(" - ", 1)[1]
+            here = text.strip().upper()
+            locs = [loc for loc, _ in fountain.locations(lines).most_common() if loc != here]
+            return "location", locs, text
+        return None
+
+    def _update_completion(self) -> None:
+        popup = self.completer.popup()
+        context = self._completion_context()
+        if context is None or not context[2].strip():
+            popup.hide()
+            return
+        kind, candidates, prefix = context
+        self._completion_kind = kind
+        model: QStringListModel = self.completer.model()
+        if model.stringList() != candidates:
+            model.setStringList(candidates)
+        self.completer.setCompletionPrefix(prefix)
+        count = self.completer.completionCount()
+        if count == 0 or (count == 1 and self.completer.currentCompletion().upper() == prefix.upper()):
+            popup.hide()
+            return
+        popup.setCurrentIndex(self.completer.completionModel().index(0, 0))
+        rect = self.cursorRect().translated(self.viewport().pos())
+        rect.setWidth(popup.sizeHintForColumn(0) + popup.verticalScrollBar().sizeHint().width() + 16)
+        self.completer.complete(rect)
+
+    def _insert_completion(self, completion: str) -> None:
+        cursor = self.textCursor()
+        prefix = self.completer.completionPrefix()
+        cursor.movePosition(QTextCursor.MoveOperation.Left, QTextCursor.MoveMode.KeepAnchor, len(prefix))
+        if self._completion_kind == "extension":
+            completion += ")"
+        elif self._completion_kind == "location":
+            completion += " - "
+        self.history.begin(cursor.position())
+        cursor.insertText(completion)
+        self.setTextCursor(cursor)
+        self.history.end(cursor.position())
+        self._refresh_around_cursor()
+        self._apply_layout()
+        if self._completion_kind == "location":
+            QTimer.singleShot(0, self._update_completion_times)
+
+    def _update_completion_times(self) -> None:
+        """After picking a location, offer times of day straight away."""
+        model: QStringListModel = self.completer.model()
+        self._completion_kind = "time"
+        model.setStringList(fountain.times_of_day(self.lines()))
+        self.completer.setCompletionPrefix("")
+        self.completer.popup().setCurrentIndex(self.completer.completionModel().index(0, 0))
+        rect = self.cursorRect().translated(self.viewport().pos())
+        rect.setWidth(180)
+        self.completer.complete(rect)

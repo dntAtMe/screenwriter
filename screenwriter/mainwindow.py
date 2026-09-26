@@ -22,6 +22,7 @@ from .binder import Binder
 from .editors.prose import ProseEditor
 from .editors.screenplay import ScreenplayEditor
 from .editors import screenplay
+from .fountain import EL_NAMES
 from .project import FOLDER, NOTE, PROSE, SCREENPLAY, Project
 
 APP_NAME = "Screenwriter"
@@ -139,6 +140,12 @@ class MainWindow(QMainWindow):
             self._action(file, "Close Project", self._close_project_from_menu),
         ]
 
+        edit = bar.addMenu("&Edit")
+        self.project_actions += [
+            self._action(edit, "Undo", lambda: self._current_call("undo"), QKeySequence.StandardKey.Undo),
+            self._action(edit, "Redo", lambda: self._current_call("redo"), QKeySequence.StandardKey.Redo),
+        ]
+
         insert = bar.addMenu("&Insert")
         for kind, label, shortcut in (
             (PROSE, "New Prose Document", "Ctrl+N"),
@@ -147,6 +154,12 @@ class MainWindow(QMainWindow):
             (FOLDER, "New Folder", "Ctrl+Shift+G"),
         ):
             self.project_actions.append(self._action(insert, label, lambda _=False, k=kind: self.binder.add(k), shortcut))
+
+        fmt = bar.addMenu("F&ormat")
+        self.element_actions = []
+        for i, el in enumerate(screenplay.SETTABLE, start=1):
+            action = self._action(fmt, EL_NAMES[el], lambda _=False, e=el: self._set_element(e), f"Ctrl+{i}")
+            self.element_actions.append(action)
 
         view = bar.addMenu("&View")
         self.project_actions += [
@@ -166,6 +179,21 @@ class MainWindow(QMainWindow):
     def _set_project_actions_enabled(self, enabled: bool) -> None:
         for action in self.project_actions:
             action.setEnabled(enabled)
+        self._update_element_actions()
+
+    def _update_element_actions(self) -> None:
+        is_script = isinstance(self.tabs.currentWidget(), ScreenplayEditor)
+        for action in self.element_actions:
+            action.setEnabled(is_script)
+
+    def _current_call(self, method: str) -> None:
+        if editor := self.tabs.currentWidget():
+            getattr(editor, method)()
+
+    def _set_element(self, el) -> None:
+        editor = self.tabs.currentWidget()
+        if isinstance(editor, ScreenplayEditor):
+            editor.set_element(el)
 
     # --- projects ---------------------------------------------------------------
 
@@ -261,11 +289,11 @@ class MainWindow(QMainWindow):
         if self.project is None:
             return
         for node_id, editor in self.editors.items():
-            if editor.document().isModified():
+            if editor.is_modified():
                 node = self.project.find(node_id)
                 if node:
                     self.project.write_text(node, editor.text())
-                editor.document().setModified(False)
+                editor.mark_saved()
 
     def close_tab(self, index: int) -> None:
         if index >= 0:
@@ -283,6 +311,7 @@ class MainWindow(QMainWindow):
 
     def _on_tab_changed(self, index: int) -> None:
         self.save_all()
+        self._update_element_actions()
         editor = self.tabs.widget(index)
         if editor is None:
             self.stats_label.clear()
@@ -302,7 +331,7 @@ class MainWindow(QMainWindow):
     def _on_deleted(self, node_ids: list[str]) -> None:
         for node_id in node_ids:
             if editor := self.editors.get(node_id):
-                editor.document().setModified(False)
+                editor.mark_saved()
                 self._remove_tab(self.tabs.indexOf(editor))
 
     def _update_stats(self, editor) -> None:
