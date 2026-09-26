@@ -6,7 +6,13 @@ A personal, tunable writing app for screenplays, books, notes and ideas, built w
 
 ```bash
 uv run python -m screenwriter                               # reopens the last project
-uv run python -m screenwriter "examples/The Lighthouse"     # open a specific project
+uv run python -m screenwriter ~/Documents/"My Story"        # open a specific project
+```
+
+To try the sample, copy it first so your edits don't end up in the repo:
+
+```bash
+cp -R "examples/The Lighthouse" ~/Documents/ && uv run python -m screenwriter ~/Documents/"The Lighthouse"
 ```
 
 Tests: `uv run pytest`
@@ -33,6 +39,10 @@ Tests: `uv run pytest`
 - **Outline** (`Ctrl+Shift+O`): numbered scenes under their sections for scripts, headings for prose. Click to jump; it follows the cursor.
 - **Search** (`Ctrl+Shift+F`): matches across the whole project, grouped by document. **Find** (`Ctrl+F`, `Ctrl+G`) searches the current document.
 - **Idea capture** (`Ctrl+Shift+I`): jot an idea from anywhere; it lands, timestamped, in the project's Idea Inbox note.
+- **Export** (`Ctrl+E`, for the item selected in the binder):
+  - Screenplays: industry-format **PDF** (Courier 12pt, standard margins and indents, a title page from Fountain `Title:`/`Author:`/… lines, page numbers, scene headings kept with what follows, `(MORE)`/`(CONT'D)` when dialogue breaks across pages), **Final Draft `.fdx`** and **Fountain**.
+  - Prose: one chapter, or a whole folder compiled in binder order, as **PDF**, **Word `.docx`** (standard manuscript format: Times 12pt, double spaced, chapters on new pages) or **Markdown**. `[[notes]]` are left out.
+  - Boards: **PNG** or **PDF** image.
 - **Autosave** shortly after you stop typing, and on tab switch or close. Open tabs are restored per project.
 - **Focus mode** (`Ctrl+Shift+D`), full screen, zoom.
 
@@ -59,5 +69,5 @@ My Story/
 3. ~~Fountain screenplay editor~~, smart formatting, completion, outline
 4. ~~Ideas inbox with quick capture, project-wide search~~
 5. ~~Mind map / corkboard canvas~~
-6. Export: PDF (screenplay page format), Final Draft `.fdx`, `.docx`/EPUB via Pandoc
+6. ~~Export: screenplay PDF, Final Draft, manuscript PDF/Word/Markdown, board images~~ (EPUB via Pandoc: later)
 7. Snapshots / version history

@@ -106,3 +106,17 @@ def test_structure():
     assert characters(lines).most_common() == [("MARA", 2), ("OWEN", 1)]
     assert set(locations(lines)) == {"INT. KITCHEN", "EXT. BEACH", "FLASHBACK"}
     assert times_of_day(lines)[:2] in (["DAY", "NIGHT"], ["NIGHT", "DAY"])
+
+
+def test_title_page():
+    lines = parse("Title: THE LIGHTHOUSE\nCredit: written by\nAuthor: K. P.\nContact:\n    Somewhere\n    123\n\nEXT. SEA - DAY")
+    assert [el for _, el in lines][:7] == [El.TITLE_PAGE] * 6 + [El.BLANK]
+    assert lines[7][1] == El.SCENE
+    from screenwriter.fountain import title_page
+
+    assert title_page(lines) == {"title": "THE LIGHTHOUSE", "credit": "written by", "author": "K. P.",
+                                 "contact": "Somewhere\n123"}
+
+
+def test_title_key_mid_script_is_action():
+    assert [el for _, el in parse("She reads.\n\nTitle: nothing")][-1] == El.ACTION

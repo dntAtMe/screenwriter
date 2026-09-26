@@ -224,8 +224,12 @@ class LinkItem(QGraphicsPathItem):
 
 class BoardScene(QGraphicsScene):
     GRID = 24
+    plain_background = False  # exports: white, no grid
 
     def drawBackground(self, painter: QPainter, rect: QRectF) -> None:
+        if self.plain_background:
+            painter.fillRect(rect, Qt.GlobalColor.white)
+            return
         pal = self.palette()
         painter.fillRect(rect, pal.color(QPalette.ColorRole.Base))
         dot = QColor(pal.color(QPalette.ColorRole.Text))
@@ -349,6 +353,39 @@ class BoardEditor(QGraphicsView):
         scale = self.transform().m11() * factor
         if 0.2 <= scale <= 4:
             self.scale(factor, factor)
+
+    def export_image(self, path: str) -> None:
+        """PNG or PDF of the whole board on a plain white background."""
+        from PySide6.QtCore import QMarginsF
+        from PySide6.QtGui import QImage, QPageLayout, QPageSize, QPdfWriter
+
+        self._finish_editing()
+        selected = self.scene().selectedItems()
+        self.scene().clearSelection()
+        rect = self.scene().itemsBoundingRect().adjusted(-32, -32, 32, 32)
+        scene = self.scene()
+        scene.plain_background = True
+        try:
+            if path.lower().endswith(".pdf"):
+                writer = QPdfWriter(path)
+                writer.setResolution(72)
+                writer.setPageLayout(QPageLayout(QPageSize(rect.size(), QPageSize.Unit.Point),
+                                                 QPageLayout.Orientation.Portrait, QMarginsF(0, 0, 0, 0)))
+                painter = QPainter(writer)
+                scene.render(painter, QRectF(0, 0, rect.width(), rect.height()), rect)
+                painter.end()
+            else:
+                image = QImage((rect.size() * 2).toSize(), QImage.Format.Format_ARGB32)
+                image.fill(Qt.GlobalColor.white)
+                painter = QPainter(image)
+                painter.setRenderHints(QPainter.RenderHint.Antialiasing | QPainter.RenderHint.TextAntialiasing)
+                scene.render(painter, QRectF(image.rect()), rect)
+                painter.end()
+                image.save(path)
+        finally:
+            scene.plain_background = False
+            for item in selected:
+                item.setSelected(True)
 
     # --- undo (whole-board snapshots; boards are small) ------------------------------
 

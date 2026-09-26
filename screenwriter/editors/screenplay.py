@@ -78,6 +78,7 @@ class FountainHighlighter(QSyntaxHighlighter):
         El.SECTION: _fmt(bold=True, color="#c27c3a"),
         El.SYNOPSIS: _fmt(italic=True, color=GREY),
         El.NOTE: _fmt(italic=True, color=GREY),
+        El.TITLE_PAGE: _fmt(color="#7f9cc0"),
     }
     INLINE = [
         (re.compile(r"\*\*\*[^*]+\*\*\*"), _fmt(bold=True, italic=True)),

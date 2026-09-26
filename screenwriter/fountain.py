@@ -26,6 +26,7 @@ class El(IntEnum):
     SECTION = 9
     SYNOPSIS = 10
     NOTE = 11
+    TITLE_PAGE = 12  # "Title: …", "Author: …" key/value lines at the very top
 
 
 EL_NAMES = {
@@ -41,6 +42,7 @@ EL_NAMES = {
     El.SECTION: "Section",
     El.SYNOPSIS: "Synopsis",
     El.NOTE: "Note",
+    El.TITLE_PAGE: "Title Page",
 }
 
 IN_DIALOGUE = (El.CHARACTER, El.PARENTHETICAL, El.DIALOGUE)
@@ -62,6 +64,9 @@ TYPED_TRANSITION_RE = re.compile(
     re.IGNORECASE,
 )
 NAME_END_PUNCTUATION = tuple(".!?,;:-–—\"'")
+TITLE_KEY_RE = re.compile(
+    r"^(title|credit|author|authors|source|draft date|date|contact|copyright|notes|revision)\s*:(.*)$", re.IGNORECASE
+)
 
 
 def normalize_transition(s: str) -> str:
@@ -99,11 +104,15 @@ def classify(
     forced_cue: the writer pressed Tab to start a cue on this line.
     """
     s = text.strip()
+    if prev in (-1, El.TITLE_PAGE) and TITLE_KEY_RE.match(s):
+        return El.TITLE_PAGE
+    if prev == El.TITLE_PAGE and s and text[:1] in (" ", "\t"):
+        return El.TITLE_PAGE  # indented continuation of a multi-line value
     if prev in IN_DIALOGUE:
         if not s:
             return El.DIALOGUE_PENDING if prev in (El.CHARACTER, El.PARENTHETICAL) else El.BLANK
         return El.PARENTHETICAL if s.startswith("(") else El.DIALOGUE
-    after_break = prev in AFTER_BREAK
+    after_break = prev in AFTER_BREAK + (El.TITLE_PAGE,)
     if forced_cue and after_break:
         return El.CHARACTER
     if not s:
@@ -134,6 +143,21 @@ def classify(
         if has_dialogue or typing_cue:
             return El.CHARACTER
     return El.ACTION
+
+
+def title_page(lines: list[tuple[str, El]]) -> dict[str, str]:
+    """Title page fields, lower-case keys ('title', 'author', 'draft date', …)."""
+    fields: dict[str, str] = {}
+    key = None
+    for text, el in lines:
+        if el != El.TITLE_PAGE:
+            break
+        if m := TITLE_KEY_RE.match(text.strip()):
+            key = m.group(1).lower()
+            fields[key] = m.group(2).strip()
+        elif key:
+            fields[key] = (fields[key] + "\n" + text.strip()).strip()
+    return fields
 
 
 def parse(text: str) -> list[tuple[str, El]]:

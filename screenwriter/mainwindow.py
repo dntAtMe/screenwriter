@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
 
 from .binder import Binder
 from .capture import QuickCapture, append_idea, format_idea
+from .exportdialog import run_export
 from . import board
 from .editors.board import BoardEditor
 from .outline import OutlinePanel
@@ -164,6 +165,7 @@ class MainWindow(QMainWindow):
         file.addSeparator()
         self.project_actions = [
             self._action(file, "Save", self.save_all, QKeySequence.StandardKey.Save),
+            self._action(file, "Export…", self.export_current, "Ctrl+E"),
             self._action(file, "Close Tab", lambda: self.close_tab(self.tabs.currentIndex()), "Ctrl+W"),
             self._action(file, "Close Project", self._close_project_from_menu),
         ]
@@ -391,6 +393,22 @@ class MainWindow(QMainWindow):
     def _update_element(self, editor, name: str) -> None:
         if editor is self.tabs.currentWidget():
             self.element_label.setText(name)
+
+    def export_current(self) -> None:
+        """Export the item selected in the binder (or the current tab's document)."""
+        self.save_all()
+        self._save_structure()
+        item = self.binder.currentItem()
+        node_id = item.data(0, Qt.ItemDataRole.UserRole) if item else getattr(self.tabs.currentWidget(), "node_id", None)
+        node = self.project.find(node_id) if node_id else None
+        if node is None:
+            return
+        if path := run_export(self, self.project, node, self._text_of):
+            self.statusBar().showMessage(f"Exported to {path}", 6000)
+
+    def _text_of(self, node) -> str:
+        editor = self.editors.get(node.id)
+        return editor.text() if editor else self.project.read_text(node)
 
     def open_at(self, node_id: str, pos: int, length: int) -> None:
         self.open_document(node_id)
