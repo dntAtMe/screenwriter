@@ -17,7 +17,7 @@ a = Analysis(
         (str(ROOT / "screenwriter" / "resources"), "screenwriter/resources"),
         (str(ROOT / "LICENSE"), "."),
     ] + collect_data_files("docx"),
-    excludes=["tkinter", "PySide6.QtQml", "PySide6.QtQuick", "PySide6.QtNetwork", "PySide6.QtTest"],
+    excludes=["tkinter", "PySide6.QtQml", "PySide6.QtQuick", "PySide6.QtTest"],  # QtNetwork: Google sign-in
     noarchive=False,
 )
 pyz = PYZ(a.pure)

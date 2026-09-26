@@ -46,6 +46,20 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libegl1 libgl1 libxkbcommon0 libxkbcommon-x11-0 libfontconfig1 libdbus-1-3 libxcb-cursor0 libxcb-icccm4 libxcb-keysyms1 libxcb-shape0
 
       - run: uv sync --locked --group build
+      # Google sign-in credentials (see docs/google-drive-setup.md). Without the secrets the
+      # app is built without "Sign in with Google" and cloud-folder sync still works.
+      - name: Google sign-in credentials
+        env:
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+        shell: bash
+        run: |
+          if [ -n "$GOOGLE_CLIENT_ID" ] && [ -n "$GOOGLE_CLIENT_SECRET" ]; then
+            python3 -c "import json, os; json.dump({'client_id': os.environ['GOOGLE_CLIENT_ID'], 'client_secret': os.environ['GOOGLE_CLIENT_SECRET']}, open('screenwriter/resources/google_client.json', 'w'))"
+            echo "Google sign-in: included"
+          else
+            echo "Google sign-in: not configured (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET secrets missing)"
+          fi
       - run: uv run pytest -q
         env:
           QT_QPA_PLATFORM: offscreen

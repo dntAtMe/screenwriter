@@ -16,3 +16,4 @@ out/
 _site/
 examples/**/.history/
 examples/**/snapshots/
+screenwriter/resources/google_client.json
