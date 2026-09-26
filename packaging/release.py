@@ -29,6 +29,7 @@ def notes(version: str) -> str:
 
 
 def main(argv: list[str]) -> None:
+    sys.stdout.reconfigure(encoding="utf-8")  # changelog text on Windows consoles (cp1252)
     command, *args = argv or ["version"]
     if command == "version":
         print(code_version())

@@ -8,7 +8,9 @@ ROOT = Path(__file__).parent.parent
 
 
 def release(*args):
-    return subprocess.run([sys.executable, "packaging/release.py", *args], cwd=ROOT, capture_output=True, text=True)
+    return subprocess.run(
+        [sys.executable, "packaging/release.py", *args], cwd=ROOT, capture_output=True, text=True, encoding="utf-8"
+    )
 
 
 def test_versions_agree_and_changelog_has_notes():
