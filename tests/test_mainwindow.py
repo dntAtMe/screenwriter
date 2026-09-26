@@ -299,3 +299,65 @@ def test_prose_bible_workflow(window):
     cursor = prose.textCursor()
     cursor.setPosition(2)
     assert prose.bible_at(prose.cursorRect(cursor).center()).node_id == entry_id
+
+
+def test_two_windows_sync_through_a_cloud_folder(window, tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+
+    from screenwriter.sync import package_name
+
+    notices = []
+    monkeypatch.setattr(QMessageBox, "information", staticmethod(lambda *a, **k: notices.append(a[1])))
+    desktop = window
+    package = tmp_path / "Google Drive" / "Screenwriter" / package_name(desktop.project.name)
+    package.parent.mkdir(parents=True)
+    desktop.sync_package = package
+    assert desktop.sync_now().status == "uploaded"
+
+    # the "laptop": another window opening the cloud file into its own folder
+    desktop.settings.remove(f"sync_local/{desktop.project.id}")
+    laptop = MainWindow()
+    laptop.open_project_file(str(package), str(tmp_path / "laptop"), keep_synced=True)
+    laptop.history.machine = "Laptop"
+    assert laptop.project.path != desktop.project.path and laptop.sync_package == package
+
+    # a one-way change reaches an open editor on the other computer
+    desktop.open_document("ch01")
+    laptop.open_document("ch01")
+    laptop.editors["ch01"].replace_all("Written on the laptop.")
+    assert laptop.sync_now().status == "uploaded"
+    assert desktop.sync_now().status == "downloaded"
+    assert desktop.editors["ch01"].text() == "Written on the laptop."
+
+    # both change the same chapter: both versions kept, the writer is told
+    laptop.editors["ch01"].replace_all("Laptop again.")
+    laptop.sync_now()
+    desktop.editors["ch01"].replace_all("Desktop again.")
+    result = desktop.sync_now()
+    assert result.status == "merged" and result.conflicts
+    assert any("Changed on both computers" in n for n in notices)
+    manuscript = desktop.binder.find_item("manuscript")
+    titles = [manuscript.child(i).text(0) for i in range(manuscript.childCount())]
+    assert any(t.endswith("(from Laptop)") for t in titles)
+    assert desktop.editors["ch01"].text() == "Desktop again."
+
+    # the laptop then receives the merge, including the kept copy
+    assert laptop.sync_now().status == "downloaded"
+    assert laptop.editors["ch01"].text() == "Desktop again."
+    dispose(laptop)
+
+
+def test_share_a_copy_and_open_it(window, tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QFileDialog
+
+    target = tmp_path / "Outbox" / "Story.screenwriter"
+    target.parent.mkdir()
+    monkeypatch.setattr(QFileDialog, "getSaveFileName", staticmethod(lambda *a, **k: (str(target), "")))
+    window.share_copy()
+    assert target.exists()
+    window.settings.remove(f"sync_local/{window.project.id}")
+    other = MainWindow()
+    other.open_project_file(str(target), str(tmp_path / "friend"), keep_synced=False)
+    assert other.project.name == window.project.name and other.sync_package is None
+    assert other.history.log()  # history came along
+    dispose(other)

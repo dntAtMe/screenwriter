@@ -76,6 +76,7 @@ def read_tracked_files(project_path: Path) -> dict[str, bytes]:
 class ProjectHistory:
     def __init__(self, project_path: Path):
         self.project_path = Path(project_path)
+        self.machine = machine_name()  # recorded on save points; sync shows where changes came from
         path = self.project_path / HISTORY_DIR
         self.repo = Repo(str(path)) if (path / "objects").is_dir() else Repo.init_bare(str(path), mkdir=True)
 
@@ -118,7 +119,7 @@ class ProjectHistory:
     def commit_files(self, files: dict[str, bytes], message: str, parents: list[bytes],
                      when: float | None = None, machine: str | None = None) -> bytes:
         """Record `files` as a save point with the given parents; moves nothing."""
-        machine = machine or machine_name()
+        machine = machine or self.machine
         commit = Commit()
         commit.tree = self._build_tree(files)
         commit.parents = parents

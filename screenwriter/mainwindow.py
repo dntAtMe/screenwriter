@@ -1,3 +1,4 @@
+from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import QSettings, Qt, QTimer
@@ -28,6 +29,8 @@ from .exportdialog import run_export
 from .snapshotdialog import SnapshotsDialog
 from .historydialog import HistoryDialog
 from .projecthistory import ProjectHistory
+from . import sync as cloud
+from .syncdialog import SyncDialog
 from . import board
 from .editors.board import BoardEditor
 from .editors.bible import BibleEditor
@@ -53,8 +56,11 @@ class Welcome(QWidget):
         subtitle.setStyleSheet("color: gray;")
         new_btn = QPushButton("New Project…")
         open_btn = QPushButton("Open Project…")
+        file_btn = QPushButton("Open Project File…")
+        file_btn.setToolTip("Open a .screenwriter file — a project synced through a cloud folder, or a copy someone sent you")
         new_btn.clicked.connect(window.new_project)
         open_btn.clicked.connect(window.open_project_dialog)
+        file_btn.clicked.connect(window.open_project_file)
         self.recent = QListWidget()
         self.recent.setMaximumHeight(180)
         self.recent.itemActivated.connect(lambda item: window.open_project(Path(item.text())))
@@ -62,6 +68,7 @@ class Welcome(QWidget):
         buttons = QHBoxLayout()
         buttons.addWidget(new_btn)
         buttons.addWidget(open_btn)
+        buttons.addWidget(file_btn)
         column = QVBoxLayout()
         column.addStretch()
         column.addWidget(title)
@@ -145,6 +152,9 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(self.splitter)
         self.setCentralWidget(self.stack)
 
+        self.sync_label = QLabel()
+        self.sync_label.setStyleSheet("color: gray;")
+        self.statusBar().addPermanentWidget(self.sync_label)
         self.stats_label = QLabel()
         self.element_label = QLabel()
         self.element_label.setStyleSheet("color: gray;")
@@ -154,7 +164,13 @@ class MainWindow(QMainWindow):
         # Project history: an automatic save point every few minutes of changes, and on close.
         self.history: ProjectHistory | None = None
         self.history_timer = QTimer(self, interval=5 * 60 * 1000)
-        self.history_timer.timeout.connect(lambda: self.save_point())
+        self.history_timer.timeout.connect(self._periodic_save_point)
+
+        # Cloud sync: the package file this project syncs with (per computer, in settings).
+        self.sync_package: Path | None = None
+        self._package_mtime: float | None = None
+        self.sync_timer = QTimer(self, interval=60 * 1000)
+        self.sync_timer.timeout.connect(self._check_cloud)
 
         # Autosave: shortly after typing stops, and always on tab switch / close.
         self.save_timer = QTimer(self, singleShot=True, interval=1500)
@@ -184,6 +200,7 @@ class MainWindow(QMainWindow):
         file = bar.addMenu("&File")
         self._action(file, "New Project…", self.new_project, "Ctrl+Shift+N")
         self._action(file, "Open Project…", self.open_project_dialog, "Ctrl+O")
+        self._action(file, "Open Project File…", self.open_project_file)
         file.addSeparator()
         self.project_actions = [
             self._action(file, "Save", self.save_all, QKeySequence.StandardKey.Save),
@@ -191,6 +208,8 @@ class MainWindow(QMainWindow):
             self._action(file, "Save Version…", self.save_version, "Ctrl+Alt+S"),
             self._action(file, "History…", self.show_history, "Ctrl+Alt+H"),
             self._action(file, "Older Snapshots…", self.show_older_snapshots),
+            self._action(file, "Sync & Backup…", self.show_sync_settings),
+            self._action(file, "Share a Copy…", self.share_copy),
             self._action(file, "Close Tab", lambda: self.close_tab(self.tabs.currentIndex()), "Ctrl+W"),
             self._action(file, "Close Project", self._close_project_from_menu),
         ]
@@ -304,11 +323,15 @@ class MainWindow(QMainWindow):
         self.history = ProjectHistory(project.path)
         self.history.save_point()  # whatever changed outside the app since last time
         self.history_timer.start()
+        package = self.settings.value(f"sync/{project.id}")
+        self.sync_package = Path(package) if package else None
         self.stack.setCurrentWidget(self.splitter)
         self._set_project_actions_enabled(True)
         self.setWindowTitle(f"{project.name} — {APP_NAME}")
         self._remember(project.path)
         self._refresh_bible()
+        if self.sync_package:
+            self._start_sync()
         for node_id in self.settings.value(f"open_tabs/{project.path}", []) or []:
             if project.find(node_id):
                 self.open_document(node_id)
@@ -318,6 +341,12 @@ class MainWindow(QMainWindow):
             return
         self.save_point()
         self.history_timer.stop()
+        self.sync_timer.stop()
+        if self.sync_package:
+            self.sync_now(quiet=True, reload=False)
+            cloud.remove_lock(self.sync_package, self.history.machine)
+        self.sync_package = None
+        self.sync_label.clear()
         self.history.pack()
         self.history.close()
         self.history = None
@@ -510,6 +539,200 @@ class MainWindow(QMainWindow):
             if self.project.find(node_id):
                 self.open_document(node_id)
         self.statusBar().showMessage(f"Restored the project to {self.history.get(point_id).time:%d %b %H:%M}", 4000)
+
+    # --- sync & sharing ----------------------------------------------------------------
+
+    def _periodic_save_point(self) -> None:
+        if self.save_point() is not None and self.sync_package:
+            self.sync_now(quiet=True)
+
+    def _cloud_available(self) -> bool:
+        return self.sync_package is not None and self.sync_package.parent.is_dir()
+
+    def _start_sync(self) -> None:
+        """On opening a synced project: say if it's open elsewhere, then bring it up to date."""
+        if not self._cloud_available():
+            self.sync_label.setText("☁ Sync folder not available")
+            self.sync_label.setToolTip(f"{self.sync_package.parent} can't be reached. Is the cloud app running?")
+            self.sync_timer.start()
+            return
+        if other := cloud.open_elsewhere(self.sync_package, self.history.machine):
+            QMessageBox.information(
+                self, "Open on another computer",
+                f"“{self.project.name}” is open on {other} right now.\n\n"
+                "You can keep writing here — changes from both computers are merged when they sync — "
+                "but it's simplest to close it there first.",
+            )
+        self.sync_now(quiet=True)
+        self.sync_timer.start()
+
+    def _check_cloud(self) -> None:
+        """Every minute: keep the presence file fresh and pull if the cloud copy changed."""
+        if not self.project or not self.sync_package:
+            return
+        if not self._cloud_available():
+            self.sync_label.setText("☁ Sync folder not available")
+            return
+        cloud.write_lock(self.sync_package, self.history.machine, self.project.id)
+        try:
+            mtime = self.sync_package.stat().st_mtime
+        except OSError:
+            mtime = None
+        if mtime != self._package_mtime:
+            self.sync_now(quiet=True)
+        other = cloud.open_elsewhere(self.sync_package, self.history.machine)
+        if other and "also open" not in self.sync_label.text():
+            self.sync_label.setText(self.sync_label.text() + f" · also open on {other}")
+
+    def sync_now(self, quiet: bool = False, reload: bool = True):
+        """Sync with the cloud copy; returns the SyncResult (or None)."""
+        if not self.project or not self.sync_package:
+            return None
+        if not self._cloud_available():
+            self.sync_label.setText("☁ Sync folder not available")
+            if not quiet:
+                QMessageBox.warning(self, "Sync", f"Can't reach {self.sync_package.parent}.\nIs Google Drive (or your cloud app) running?")
+            return None
+        self.save_point()
+        try:
+            result = cloud.sync(self.history, self.project.id, self.project.name, self.sync_package)
+        except (cloud.SyncError, OSError) as e:
+            self.sync_label.setText("☁ Sync problem")
+            self.sync_label.setToolTip(str(e))
+            if not quiet:
+                QMessageBox.warning(self, "Sync", str(e))
+            return None
+        cloud.write_lock(self.sync_package, self.history.machine, self.project.id)
+        self._package_mtime = self.sync_package.stat().st_mtime if self.sync_package.exists() else None
+        if reload and result.changed:
+            self._reload_after_sync(result.changed)
+        self.sync_label.setText(f"☁ Synced {datetime.now():%H:%M}")
+        self.sync_label.setToolTip(str(self.sync_package))
+        if result.status in ("downloaded", "merged"):
+            self.statusBar().showMessage(f"Brought in changes from {result.machine}", 5000)
+        if result.conflicts:
+            names = "\n".join(f"• {c.title}" for c in result.conflicts)
+            QMessageBox.information(
+                self, "Changed on both computers",
+                f"These were changed here and on {result.machine} since the last sync:\n\n{names}\n\n"
+                f"Both versions are kept — {result.machine}'s is right below yours, marked “(from {result.machine})”. "
+                "Copy what you need and delete the one you don't want.",
+            )
+        return result
+
+    def _reload_after_sync(self, changed: list[str]) -> None:
+        """Show what sync changed on disk: the binder, and any open documents."""
+        if "project.json" in changed:
+            self.project = Project.open(self.project.path)
+            self.binder.load(self.project)
+            for node_id in self._open_tab_ids():
+                node = self.project.find(node_id)
+                editor = self.editors[node_id]
+                if node is None:
+                    self._remove_tab(self.tabs.indexOf(editor))
+                else:
+                    self.tabs.setTabText(self.tabs.indexOf(editor), self._tab_title(editor, node.title))
+            self.binder.structureChanged.emit()  # corkboards follow
+        for path in changed:
+            node = self.project.find(self._node_id_for(path))
+            editor = self.editors.get(node.id) if node else None
+            if editor is not None and not isinstance(editor, CorkboardView):
+                editor.set_text(self.project.read_text(node))
+        self._refresh_bible()
+        self._refresh_outline()
+
+    def show_sync_settings(self) -> None:
+        if self.project is None:
+            return
+        dialog = SyncDialog(self.project.name, self.project.path, self.sync_package, self.sync_label.text(), self)
+        if not dialog.exec() or dialog.chosen is None:
+            return
+        if dialog.chosen == "":
+            if self.sync_package:
+                cloud.remove_lock(self.sync_package, self.history.machine)
+            self.settings.remove(f"sync/{self.project.id}")
+            self.sync_package = None
+            self.sync_timer.stop()
+            self.sync_label.clear()
+            return
+        package = Path(dialog.chosen)
+        if package.exists():
+            try:
+                manifest = cloud.read_manifest(package)
+            except cloud.SyncError as e:
+                QMessageBox.warning(self, "Sync", str(e))
+                return
+            if manifest.get("project_id") != self.project.id:
+                QMessageBox.warning(
+                    self, "Sync",
+                    f"{package.name} in that folder belongs to a different project ({manifest.get('name')}).\n"
+                    "Rename this project or choose another folder.",
+                )
+                return
+        self.sync_package = package
+        self.settings.setValue(f"sync/{self.project.id}", str(package))
+        self.settings.setValue(f"sync_local/{self.project.id}", str(self.project.path))
+        if self.sync_now() is not None:
+            self.sync_timer.start()
+            QMessageBox.information(
+                self, "Sync & Backup",
+                f"“{self.project.name}” now syncs with\n{package}\n\n"
+                "On another computer, choose File → Open Project File… and pick that file.",
+            )
+
+    def share_copy(self) -> None:
+        """Write a .screenwriter copy (with history) to send to someone."""
+        if self.project is None:
+            return
+        self.save_point()
+        suggested = str(Path.home() / "Documents" / cloud.package_name(self.project.name))
+        path, _ = QFileDialog.getSaveFileName(self, "Share a Copy", suggested, "Screenwriter project (*.screenwriter)")
+        if not path:
+            return
+        if not path.endswith(cloud.PACKAGE_EXT):
+            path += cloud.PACKAGE_EXT
+        cloud.share(self.history, self.project.id, self.project.name, Path(path))
+        self.statusBar().showMessage(f"Saved a copy to {path}", 6000)
+
+    def open_project_file(self, package: str | None = None, parent_folder: str | None = None, keep_synced: bool | None = None) -> None:
+        """Open a .screenwriter file: set up a local copy (or reuse the one already synced with it)."""
+        if package is None:
+            package, _ = QFileDialog.getOpenFileName(self, "Open Project File", str(Path.home()), "Screenwriter project (*.screenwriter)")
+            if not package:
+                return
+        package_path = Path(package)
+        try:
+            manifest = cloud.read_manifest(package_path)
+        except cloud.SyncError as e:
+            QMessageBox.warning(self, "Open Project File", str(e))
+            return
+        known = self.settings.value(f"sync_local/{manifest.get('project_id')}")
+        if known and Project.is_project(Path(known)):
+            self.open_project(Path(known))  # already on this computer
+            return
+        if parent_folder is None:
+            parent_folder = QFileDialog.getExistingDirectory(
+                self, "Where should the project live on this computer?", str(Path.home() / "Documents"))
+            if not parent_folder:
+                return
+        if keep_synced is None:
+            in_cloud = any(cloud.inside(package_path, folder) for _, folder in cloud.cloud_folders())
+            keep_synced = QMessageBox.question(
+                self, "Keep in sync?",
+                f"Keep this project in sync with\n{package_path}?\n\n"
+                "Yes if it's your own project in a cloud folder. No for a copy someone sent you.",
+                defaultButton=QMessageBox.StandardButton.Yes if in_cloud else QMessageBox.StandardButton.No,
+            ) == QMessageBox.StandardButton.Yes
+        try:
+            path = cloud.open_package(package_path, Path(parent_folder))
+        except (cloud.SyncError, OSError) as e:
+            QMessageBox.warning(self, "Open Project File", str(e))
+            return
+        if keep_synced:
+            project_id = Project.open(path).id
+            self.settings.setValue(f"sync/{project_id}", str(package_path))
+            self.settings.setValue(f"sync_local/{project_id}", str(path))
+        self.open_project(path)
 
     def show_older_snapshots(self) -> None:
         """Per-document snapshots from before project history existed."""
@@ -876,7 +1099,7 @@ class MainWindow(QMainWindow):
         self.close_project()
         # While Qt tears the window down it still emits signals (tab changes,
         # selection changes); don't let them reach half-destroyed Python objects.
-        for timer in (self.save_timer, self.outline_timer, self.bible_timer, self.history_timer):
+        for timer in (self.save_timer, self.outline_timer, self.bible_timer, self.history_timer, self.sync_timer):
             timer.stop()
         for widget in (self.tabs, self.binder, self.outline, self.search, self.cast, self.side):
             widget.blockSignals(True)

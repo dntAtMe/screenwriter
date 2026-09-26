@@ -79,9 +79,11 @@ def _write_atomic(path: Path, text: str) -> None:
 
 
 class Project:
-    def __init__(self, path: Path, name: str, root: list[Node], inbox_id: str | None = None):
+    def __init__(self, path: Path, name: str, root: list[Node], inbox_id: str | None = None,
+                 project_id: str | None = None):
         self.path = path
         self.name = name
+        self.id = project_id or uuid.uuid4().hex  # stable across copies and computers (sync)
         self.root = root
         self.inbox_id = inbox_id
         self.snapshots = SnapshotStore(path)
@@ -100,7 +102,10 @@ class Project:
         data = json.loads((path / PROJECT_FILE).read_text(encoding="utf-8"))
         (path / DOCS_DIR).mkdir(exist_ok=True)
         root = [Node.from_dict(d) for d in data.get("binder", [])]
-        return cls(path, data.get("name", path.name), root, data.get("inbox"))
+        project = cls(path, data.get("name", path.name), root, data.get("inbox"), data.get("id"))
+        if not data.get("id"):
+            project.save()  # older projects get their permanent id now
+        return project
 
     @staticmethod
     def is_project(path: Path) -> bool:
@@ -109,6 +114,7 @@ class Project:
     def save(self) -> None:
         data = {
             "format": FORMAT_VERSION,
+            "id": self.id,
             "name": self.name,
             "binder": [n.to_dict() for n in self.root],
         }
