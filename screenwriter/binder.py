@@ -216,6 +216,18 @@ class Binder(QTreeWidget):
             self.editItem(item)
         return node.id
 
+    def insert_node(self, node: Node, parent: QTreeWidgetItem | None = None) -> None:
+        """Put an existing node (e.g. one restored from history) into the binder."""
+        item = self._make_item(node)
+        if parent is not None and not self._in_trash(parent):
+            parent.addChild(item)
+            parent.setExpanded(True)
+        else:
+            root = self.invisibleRootItem()
+            root.insertChild(root.indexOfChild(self._trash_item()), item)
+        self.setCurrentItem(item)
+        self.structureChanged.emit()
+
     def folder(self, title: str) -> QTreeWidgetItem:
         """The top-level folder with this title, created (above the Trash) if missing."""
         root = self.invisibleRootItem()

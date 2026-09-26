@@ -14,3 +14,5 @@ wheels/
 out/
 *.spec.bak
 _site/
+examples/**/.history/
+examples/**/snapshots/

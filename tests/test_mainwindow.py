@@ -103,41 +103,84 @@ def test_find_bar_ignores_board(window):
     assert window._current_text_editor() is None
 
 
-def test_daily_snapshot_and_restore(window):
-    from datetime import date
-
-    from screenwriter.snapshots import AUTO_NAME
-
-    store = window.project.snapshots
+def test_history_save_points_and_versions(window):
+    history = window.history
+    assert history is not None and history.log()  # a save point when the project opened
     window.open_document("ch02")
     editor = window.editors["ch02"]
-    original = editor.text()
-    editor.replace_all(original + "\nMore fog.")
-    window.save_all()
-    snaps = store.list("ch02")
-    assert [s.name for s in snaps] == [AUTO_NAME] and snaps[0].text() == original
-    editor.replace_all(original + "\nEven more fog.")
-    window.save_all()
-    assert len(store.list("ch02")) == 1  # one automatic snapshot per day
-
-    window.take_snapshot("Draft 2")
-    window.restore_snapshot(window.project.find("ch02"), original)
-    assert editor.text() == original
-    assert window.project.read_text(window.project.find("ch02")) == original
-    assert [s.name for s in store.list("ch02")][:2] == ["Before restore", "Draft 2"]
-    editor.undo()
-    assert editor.text().endswith("Even more fog.")
+    editor.replace_all(editor.text() + "\nMore fog.")
+    point = window.save_point()
+    assert point is not None and point.auto
+    assert window.save_point() is None  # nothing new
+    window.save_version("Draft 2")
+    assert history.log()[0].title == "Draft 2"
+    assert len(history.log("docs/ch02.md")) >= 2
 
 
-def test_restore_board_and_screenplay_are_undoable(window):
-    for node_id in ("storymap", "pilot"):
+def test_restore_document_version_is_undoable(window):
+    for node_id, path in (("ch02", "docs/ch02.md"), ("pilot", "docs/pilot.fountain"), ("storymap", "docs/storymap.board.json")):
         window.open_document(node_id)
         editor = window.editors[node_id]
         before = editor.text()
-        window.restore_snapshot(window.project.find(node_id), window.project.read_text(window.project.find(node_id)).replace("Mara", "Maura"))
-        assert "Maura" in editor.text()
-        editor.undo()
+        old = window.save_point("Original") or window.history.log()[0]
+        if node_id == "storymap":
+            editor.add_card(0, 600, "Maura", edit=False)
+        else:
+            editor.replace_all(before + "\nMaura.\n")
+        window.save_point()
+        window.restore_document_version(old.id, path)
         assert editor.text() == before
+        assert window.history.log()[0].title.startswith("Before restoring")
+        editor.undo()
+        assert "Maura" in editor.text()
+
+
+def test_restore_deleted_document(window):
+    point = window.save_point("Before deleting")
+    window.binder.setCurrentItem(window.binder.find_item("ch02"))
+    window.binder.delete_current()  # to Trash
+    item = window.binder.find_item("ch02")
+    window.binder.setCurrentItem(item)
+    from PySide6.QtWidgets import QMessageBox
+
+    QMessageBox.question = staticmethod(lambda *a, **k: QMessageBox.StandardButton.Yes)
+    window.binder.delete_current()  # permanently, from the Trash
+    assert window.project.find("ch02") is None
+    window.restore_document_version(point.id, "docs/ch02.md")
+    assert window.project.find("ch02") is not None
+    assert window.binder.find_item("ch02").parent().text(0) == "Manuscript"
+    assert "fog" in window.editors["ch02"].text()
+
+
+def test_restore_whole_project(window):
+    point = window.save_point("Start")
+    window.binder.setCurrentItem(window.binder.find_item("manuscript"))
+    new_id = window.binder.add("prose", "Chapter 3", edit=False)
+    window.editors[new_id].replace_all("New chapter.")
+    window.save_point()
+    window.restore_project_version(point.id)
+    assert window.project.find(new_id) is None
+    assert window.binder.find_item(new_id) is None
+    assert new_id not in window.editors
+    assert window.history.log()[0].title == "Before restoring the whole project"
+
+
+def test_history_dialog_lists_changes(window):
+    from screenwriter.historydialog import HistoryDialog
+
+    window.open_document("ch01")
+    window.editors["ch01"].replace_all("Changed text.")
+    window.save_version("Edited chapter 1")
+    dialog = HistoryDialog(
+        window.history, window._current_text_for, window._readable,
+        window.restore_document_version, window.restore_project_version, window.save_version,
+        focus_path="docs/ch01.md", focus_title="Chapter 1",
+    )
+    assert dialog.timeline.count() >= 1
+    assert "Edited chapter 1" in dialog.timeline.item(0).text()
+    assert dialog.selected_path() == "docs/ch01.md"
+    assert "No changes" in dialog.changes.toHtml()
+    dialog.deleteLater()
 
 
 def test_permanent_delete_removes_snapshots(window):

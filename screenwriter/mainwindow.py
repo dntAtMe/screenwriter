@@ -1,4 +1,3 @@
-from datetime import date
 from pathlib import Path
 
 from PySide6.QtCore import QSettings, Qt, QTimer
@@ -27,7 +26,8 @@ from .cast import CastPanel
 from .corkboard import CorkboardView
 from .exportdialog import run_export
 from .snapshotdialog import SnapshotsDialog
-from .snapshots import AUTO_NAME
+from .historydialog import HistoryDialog
+from .projecthistory import ProjectHistory
 from . import board
 from .editors.board import BoardEditor
 from .editors.bible import BibleEditor
@@ -151,6 +151,11 @@ class MainWindow(QMainWindow):
         self.statusBar().addPermanentWidget(self.element_label)
         self.statusBar().addPermanentWidget(self.stats_label)
 
+        # Project history: an automatic save point every few minutes of changes, and on close.
+        self.history: ProjectHistory | None = None
+        self.history_timer = QTimer(self, interval=5 * 60 * 1000)
+        self.history_timer.timeout.connect(lambda: self.save_point())
+
         # Autosave: shortly after typing stops, and always on tab switch / close.
         self.save_timer = QTimer(self, singleShot=True, interval=1500)
         self.save_timer.timeout.connect(self.save_all)
@@ -183,8 +188,9 @@ class MainWindow(QMainWindow):
         self.project_actions = [
             self._action(file, "Save", self.save_all, QKeySequence.StandardKey.Save),
             self._action(file, "Export…", self.export_current, "Ctrl+E"),
-            self._action(file, "Take Snapshot…", self.take_snapshot, "Ctrl+Alt+S"),
-            self._action(file, "Snapshots…", self.show_snapshots, "Ctrl+Alt+H"),
+            self._action(file, "Save Version…", self.save_version, "Ctrl+Alt+S"),
+            self._action(file, "History…", self.show_history, "Ctrl+Alt+H"),
+            self._action(file, "Older Snapshots…", self.show_older_snapshots),
             self._action(file, "Close Tab", lambda: self.close_tab(self.tabs.currentIndex()), "Ctrl+W"),
             self._action(file, "Close Project", self._close_project_from_menu),
         ]
@@ -295,6 +301,9 @@ class MainWindow(QMainWindow):
         self.close_project()
         self.project = project
         self.binder.load(project)
+        self.history = ProjectHistory(project.path)
+        self.history.save_point()  # whatever changed outside the app since last time
+        self.history_timer.start()
         self.stack.setCurrentWidget(self.splitter)
         self._set_project_actions_enabled(True)
         self.setWindowTitle(f"{project.name} — {APP_NAME}")
@@ -307,7 +316,11 @@ class MainWindow(QMainWindow):
     def close_project(self) -> None:
         if self.project is None:
             return
-        self.save_all()
+        self.save_point()
+        self.history_timer.stop()
+        self.history.pack()
+        self.history.close()
+        self.history = None
         self.settings.setValue(f"open_tabs/{self.project.path}", self._open_tab_ids())
         while self.tabs.count():
             self._remove_tab(0)
@@ -389,18 +402,10 @@ class MainWindow(QMainWindow):
             if editor.is_modified():
                 node = self.project.find(node_id)
                 if node:
-                    self._daily_snapshot(node)
                     self.project.write_text(node, editor.text())
                 editor.mark_saved()
 
-    # --- snapshots --------------------------------------------------------------
-
-    def _daily_snapshot(self, node) -> None:
-        """Before the first save of the day, keep the version on disk."""
-        store = self.project.snapshots
-        previous = self.project.read_text(node)
-        if previous.strip() and not store.has_snapshot_on(node.id, date.today()):
-            store.take(node.id, previous, self.project.doc_path(node).suffix, AUTO_NAME)
+    # --- history ------------------------------------------------------------------
 
     def _current_node(self):
         """The document in the current tab (not a corkboard's folder)."""
@@ -408,36 +413,124 @@ class MainWindow(QMainWindow):
         node = self.project.find(editor.node_id) if editor and self.project else None
         return node if node is not None and node.is_document else None
 
-    def take_snapshot(self, name: str | None = None) -> None:
-        node = self._current_node()
-        if node is None:
+    def _history_path(self, node) -> str:
+        return f"docs/{self.project.doc_path(node).name}"
+
+    @staticmethod
+    def _node_id_for(path: str) -> str:
+        return Path(path).name.split(".")[0]
+
+    def save_point(self, name: str = ""):
+        """Record the whole project in its history (no-op when unchanged, unless named)."""
+        if self.project is None or self.history is None:
+            return None
+        self.save_all()
+        self._save_structure()
+        return self.history.save_point(name)
+
+    def save_version(self, name: str | None = None) -> None:
+        if self.project is None:
             return
         if name is None:
-            name, ok = QInputDialog.getText(self, "Take Snapshot", f"Snapshot of “{node.title}”. Name (optional):")
-            if not ok:
+            name, ok = QInputDialog.getText(self, "Save Version", "Name this version (e.g. “Before Act 2 rewrite”):")
+            if not ok or not name.strip():
                 return
-        self.project.snapshots.take(node.id, self._text_of(node), self.project.doc_path(node).suffix, name.strip())
-        self.statusBar().showMessage(f"Snapshot of “{node.title}” taken", 3000)
+        self.save_point(name.strip())
+        self.statusBar().showMessage(f"Saved version “{name.strip()}”", 3000)
 
-    def restore_snapshot(self, node, text: str) -> None:
-        self.open_document(node.id)
-        editor = self.editors[node.id]
-        self.project.snapshots.take(node.id, editor.text(), self.project.doc_path(node).suffix, "Before restore")
-        editor.replace_all(text)
-        self.save_all()
+    def _current_text_for(self, path: str) -> str | None:
+        node = self.project.find(self._node_id_for(path)) if self.project else None
+        return self._text_of(node) if node is not None and node.is_document else None
 
-    def show_snapshots(self) -> None:
-        node = self._current_node()
-        if node is None:
+    @staticmethod
+    def _readable(path: str, text: str) -> str:
+        return board.search_text(text) if path.endswith(".board.json") else text
+
+    def show_history(self) -> None:
+        if self.project is None:
             return
-        self.save_all()
+        self.save_point()
+        node = self._current_node()
+        HistoryDialog(
+            self.history,
+            current_text=self._current_text_for,
+            readable=self._readable,
+            restore_document=self.restore_document_version,
+            restore_project=self.restore_project_version,
+            save_version=lambda name: self.save_version(name),
+            focus_path=self._history_path(node) if node else None,
+            focus_title=node.title if node else "",
+            parent=self,
+        ).exec()
+
+    def restore_document_version(self, point_id: str, path: str) -> None:
+        """Put one document back as it was at a save point (bringing it back if deleted)."""
+        point = self.history.get(point_id)
+        source = point_id
+        data = self.history.file_at(point_id, path)
+        if data is None and point.parents:  # deleted in that save point: the version just before
+            source = point.parents[0]
+            data = self.history.file_at(source, path)
+        if data is None:
+            return
+        node_id = self._node_id_for(path)
+        title = self.history.titles_at(source).get(path, (node_id, ""))[0]
+        self.save_point(f"Before restoring “{title}”")
+        text = data.decode("utf-8", "replace")
+        node = self.project.find(node_id)
+        if node is None:
+            old, parent_id = self.history.node_at(source, node_id)
+            if old is None:
+                return
+            old.children = []
+            self.binder.insert_node(old, self.binder.find_item(parent_id) if parent_id else None)
+            self._save_structure()
+            node = self.project.find(node_id)
+            self.project.write_text(node, text)
+        elif editor := self.editors.get(node_id):
+            editor.replace_all(text)  # undoable
+            self.save_all()
+        else:
+            self.project.write_text(node, text)
+        self.open_document(node_id)
+        self._refresh_bible()
+        self.statusBar().showMessage(f"Restored “{title}” from {point.time:%d %b %H:%M}", 4000)
+
+    def restore_project_version(self, point_id: str) -> None:
+        """Put the whole project back as it was at a save point."""
+        self.save_point("Before restoring the whole project")
+        tabs = self._open_tab_ids()
+        while self.tabs.count():
+            self._remove_tab(0)
+        self.history.restore_files(point_id)
+        self.project = Project.open(self.project.path)
+        self.binder.load(self.project)
+        self._refresh_bible()
+        for node_id in tabs:
+            if self.project.find(node_id):
+                self.open_document(node_id)
+        self.statusBar().showMessage(f"Restored the project to {self.history.get(point_id).time:%d %b %H:%M}", 4000)
+
+    def show_older_snapshots(self) -> None:
+        """Per-document snapshots from before project history existed."""
+        node = self._current_node()
+        if node is None or not self.project.snapshots.list(node.id):
+            QMessageBox.information(self, "Older Snapshots", "This document has no snapshots from earlier versions of the app.\n"
+                                    "Its history is in File → History.")
+            return
         readable = (lambda t: board.search_text(t)) if node.kind == BOARD else (lambda t: t)
+
+        def restore(text: str) -> None:
+            self.save_point(f"Before restoring “{node.title}”")
+            self.open_document(node.id)
+            self.editors[node.id].replace_all(text)
+            self.save_all()
+
         SnapshotsDialog(
             self.project.snapshots, node.id, node.title,
             current_text=lambda: self._text_of(node),
-            take=lambda name: self.take_snapshot(name),
-            restore=lambda text: self.restore_snapshot(node, text),
-            readable=readable, parent=self,
+            take=lambda name: self.save_version(name or f"Version of {node.title}"),
+            restore=restore, readable=readable, parent=self,
         ).exec()
 
     def close_tab(self, index: int) -> None:
@@ -783,7 +876,7 @@ class MainWindow(QMainWindow):
         self.close_project()
         # While Qt tears the window down it still emits signals (tab changes,
         # selection changes); don't let them reach half-destroyed Python objects.
-        for timer in (self.save_timer, self.outline_timer, self.bible_timer):
+        for timer in (self.save_timer, self.outline_timer, self.bible_timer, self.history_timer):
             timer.stop()
         for widget in (self.tabs, self.binder, self.outline, self.search, self.cast, self.side):
             widget.blockSignals(True)
