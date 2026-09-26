@@ -41,6 +41,8 @@ import re
 
 from .. import fountain
 from ..fountain import AFTER_BREAK, EL_NAMES, IN_DIALOGUE, SCENE_PREFIXES, SCENE_RE, El, classify
+from ..bible import BibleIndex
+from .biblemenu import add_bible_menu
 from .history import TextHistory
 from .common import TextDocumentAPI, center_column, first_available_font, paint_margins_as_page, word_count
 
@@ -131,6 +133,9 @@ class ScreenplayEditor(TextDocumentAPI, QTextEdit):
     statsChanged = Signal()
     elementChanged = Signal(str)
     bibleRequested = Signal(str, str)  # "character" | "location", NAME
+    bibleAddRequested = Signal(str, str)  # kind, selected text
+    bibleAliasRequested = Signal(str, str)  # entry node id, selected text
+    bible_index = BibleIndex()  # set by the main window
 
     # Set by the main window: story bible names for completion, and entry lookup.
     bible_names: Callable[[], tuple[list[str], list[str]]] = staticmethod(lambda: ([], []))
@@ -575,7 +580,10 @@ class ScreenplayEditor(TextDocumentAPI, QTextEdit):
             target = ("character", fountain.character_name(block.text()).upper())
         elif el == El.SCENE:
             target = ("location", heading_location(block.text()))
-        if target and target[1]:
+        selected = self.textCursor().selectedText().strip()
+        if selected and "\u2029" not in selected and len(selected) <= 60:
+            add_bible_menu(menu, selected, self.bible_index, self.bibleAddRequested.emit, self.bibleAliasRequested.emit)
+        elif target and target[1]:
             kind, name = target
             verb = "Open" if self.bible_lookup(kind, name) else "Add"
             menu.insertSeparator(menu.actions()[0])

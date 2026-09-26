@@ -46,10 +46,10 @@ class BibleEditor(QWidget):
         form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow)
         for key, label in FIELDS[kind]:
             edit = QLineEdit()
-            if key == "script names":
+            if key == "aliases":
                 edit.setPlaceholderText(
-                    "e.g. MARA, MARA QUINN — defaults to the name" if kind == CHARACTER
-                    else "e.g. LAMP ROOM, LIGHTHOUSE — defaults to the name"
+                    "Other names, comma-separated: MARA, the keeper" if kind == CHARACTER
+                    else "Other names, comma-separated: LAMP ROOM, the tower"
                 )
             edit.textEdited.connect(self._on_field_edited)
             self.inputs[key] = edit

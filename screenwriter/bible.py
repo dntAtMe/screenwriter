@@ -4,12 +4,15 @@ An entry is Markdown with a small front-matter header, readable without the app:
 
     ---
     name: Mara Quinn
-    script names: MARA
+    aliases: MARA, the keeper
     role: Protagonist
     ---
     Free-form notes…
 
 Unknown header keys are kept, so fields can be added by hand.
+
+Aliases may end in * to match any ending, for inflected languages:
+"Kacpr*" finds Kacpra, Kacprowi, Kacprem…
 """
 
 from __future__ import annotations
@@ -25,14 +28,14 @@ CHARACTER, LOCATION = "character", "location"
 FIELDS = {
     CHARACTER: [
         ("name", "Name"),
-        ("script names", "Name in script"),
+        ("aliases", "Also called"),
         ("role", "Role"),
         ("age", "Age"),
         ("description", "Description"),
     ],
     LOCATION: [
         ("name", "Name"),
-        ("script names", "Name in headings"),
+        ("aliases", "Also called"),
         ("description", "Description"),
     ],
 }
@@ -53,6 +56,8 @@ def parse_entry(text: str) -> tuple[dict[str, str], str]:
             key, value = line.split(":", 1)
             key = key.strip().lower()
             fields[key] = value.strip()
+    if "script names" in fields and "aliases" not in fields:  # older entries
+        fields["aliases"] = fields.pop("script names")
     return fields, text[m.end():]
 
 
@@ -69,13 +74,17 @@ def format_entry(fields: dict[str, str], notes: str) -> str:
     return "\n".join(lines) + "\n" + (("\n" + body) if body else "")
 
 
+def aliases(fields: dict[str, str]) -> list[str]:
+    return [n.strip() for n in fields.get("aliases", fields.get("script names", "")).split(",") if n.strip()]
+
+
 def script_names(fields: dict[str, str], kind: str = CHARACTER) -> list[str]:
     """The names to look for in scripts, upper-case.
 
-    Characters: 'script names' (comma-separated), else the name and its first word.
-    Locations: 'script names', else the name.
+    Characters: the aliases, else the name and its first word.
+    Locations: the aliases, else the name.
     """
-    given = [n.strip().upper() for n in fields.get("script names", "").split(",") if n.strip()]
+    given = [n.upper() for n in aliases(fields)]
     if given:
         return given
     name = fields.get("name", "").strip().upper()
@@ -121,10 +130,15 @@ class Report:
 
 
 def _name_re(names: list[str]) -> re.Pattern | None:
-    names = [n for n in names if n]
+    """Whole-word, case-insensitive match of any name; "stem*" matches any ending."""
+    names = [n for n in names if n.rstrip("*")]
     if not names:
         return None
-    alternatives = "|".join(re.escape(n) for n in sorted(names, key=len, reverse=True))
+
+    def pattern(n: str) -> str:
+        return re.escape(n[:-1]) + r"\w*" if n.endswith("*") else re.escape(n)
+
+    alternatives = "|".join(pattern(n) for n in sorted(names, key=len, reverse=True))
     return re.compile(rf"(?<!\w)({alternatives})(?!\w)", re.IGNORECASE)
 
 
@@ -196,13 +210,14 @@ def _snippet(line: str, m: re.Match, width: int = 40) -> str:
 
 
 def location_report(names: list[str], docs: list[Document]) -> Report:
-    """Scenes whose heading contains one of the names."""
+    """Scenes whose heading contains one of the names, and mentions in prose."""
     report = Report()
     finder = _name_re(names)
     if not finder:
         return report
     for doc_id, title, kind, text in docs:
         if kind != "screenplay":
+            _scan_prose(report, finder, doc_id, title, text)
             continue
         offsets = _line_offsets(text)
         for i, (line, el) in enumerate(parse(text)):
@@ -221,9 +236,79 @@ def known_names(entries: list[tuple[str, str]]) -> tuple[list[str], list[str]]:
     for kind, text in entries:
         fields, _ = parse_entry(text)
         if kind == CHARACTER:
-            given = [n.strip().upper() for n in fields.get("script names", "").split(",") if n.strip()]
+            given = [n.upper() for n in aliases(fields)]
             names = given or ([fields["name"].strip().upper()] if fields.get("name", "").strip() else [])
             characters += names[:1] + [n for n in given[1:]]
         elif kind == LOCATION:
             locations += script_names(fields, LOCATION)
     return characters, locations
+
+
+# --- names across the whole bible (prose highlighting, completion, cast lists) ----------------
+
+
+@dataclass
+class IndexEntry:
+    node_id: str
+    kind: str
+    name: str
+    summary: str
+    names: list[str]  # everything that refers to this entry, as written
+
+
+class BibleIndex:
+    """All bible entries and the names they go by, for finding them in any text."""
+
+    def __init__(self, entries: list[tuple[str, str, str]] = ()):  # (node id, kind, entry text)
+        self.entries: list[IndexEntry] = []
+        by_name: dict[str, IndexEntry] = {}
+        for node_id, kind, text in entries:
+            fields, notes = parse_entry(text)
+            name = fields.get("name", "").strip()
+            if not name:
+                continue
+            names = [name] + aliases(fields)
+            if kind == CHARACTER and not aliases(fields) and " " in name:
+                names.append(name.split()[0])  # "Mara Quinn" is also "Mara"
+            entry = IndexEntry(node_id, kind, name, entry_summary(text), list(dict.fromkeys(names)))
+            self.entries.append(entry)
+            for n in entry.names:
+                by_name.setdefault(n.lower(), entry)
+        self._by_name = by_name
+        # "kacpr*" stems, longest first so the most specific wins
+        self._stems = sorted(((n[:-1], e) for n, e in by_name.items() if n.endswith("*")), key=lambda s: -len(s[0]))
+        self.regex = _name_re(list(by_name)) if by_name else None
+
+    def __bool__(self) -> bool:
+        return bool(self.entries)
+
+    def lookup(self, text: str) -> IndexEntry | None:
+        text = text.lower()
+        if entry := self._by_name.get(text):
+            return entry
+        return next((e for stem, e in self._stems if text.startswith(stem)), None)
+
+    def find(self, text: str):
+        """(match, entry) for every mention in text."""
+        if self.regex is None:
+            return
+        for m in self.regex.finditer(text):
+            if entry := self.lookup(m.group(0)):
+                yield m, entry
+
+    def completions(self) -> list[str]:
+        """Names as they'd be written in prose: 'Mara Quinn', 'Mara', 'the keeper'."""
+        out = []
+        for entry in self.entries:
+            for n in entry.names:
+                if not n.endswith("*"):
+                    out.append(n.title() if n.isupper() else n)
+        return list(dict.fromkeys(out))
+
+    def cast(self, text: str) -> list[tuple[IndexEntry, int]]:
+        """Entries mentioned in text, most mentioned first."""
+        counts: dict[str, int] = {}
+        for _, entry in self.find(text):
+            counts[entry.node_id] = counts.get(entry.node_id, 0) + 1
+        by_id = {e.node_id: e for e in self.entries}
+        return sorted(((by_id[i], n) for i, n in counts.items()), key=lambda x: (-x[1], x[0].name))

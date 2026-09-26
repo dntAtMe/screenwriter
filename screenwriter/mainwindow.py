@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
 
 from .binder import Binder
 from .capture import QuickCapture, append_idea, format_idea
+from .cast import CastPanel
 from .corkboard import CorkboardView
 from .exportdialog import run_export
 from .snapshotdialog import SnapshotsDialog
@@ -119,6 +120,13 @@ class MainWindow(QMainWindow):
         self.side.setDocumentMode(True)
         self.side.addTab(self.outline, "Outline")
         self.side.addTab(self.search, "Search")
+        self.cast = CastPanel(self.binder.icons)
+        self.cast.openRequested.connect(self.open_document)
+        self.side.addTab(self.cast, "Cast")
+        self.bible_index = bible.BibleIndex()
+        self.bible_timer = QTimer(self, singleShot=True, interval=600)
+        self.bible_timer.timeout.connect(self._refresh_bible)
+        self.binder.structureChanged.connect(self.bible_timer.start)
         self.outline_timer = QTimer(self, singleShot=True, interval=300)
         self.outline_timer.timeout.connect(self._refresh_outline)
 
@@ -284,6 +292,7 @@ class MainWindow(QMainWindow):
         self._set_project_actions_enabled(True)
         self.setWindowTitle(f"{project.name} — {APP_NAME}")
         self._remember(project.path)
+        self._refresh_bible()
         for node_id in self.settings.value(f"open_tabs/{project.path}", []) or []:
             if project.find(node_id):
                 self.open_document(node_id)
@@ -334,16 +343,25 @@ class MainWindow(QMainWindow):
             editor = ScreenplayEditor()
             editor.bible_names = self._bible_names
             editor.bible_lookup = self._find_bible_entry
+            editor.bible_index = self.bible_index
             editor.bibleRequested.connect(self.open_bible_entry)
+            self._connect_bible_menu(editor)
         elif node.kind in BIBLE_KINDS:
             editor = BibleEditor(node.kind, self._scan_documents)
             editor.nameChanged.connect(lambda name, i=node_id: self._rename_from_editor(i, name))
             editor.openRequested.connect(self.open_at)
+            editor.textChanged.connect(self.bible_timer.start)
+            editor.notes.set_bible(self.bible_index)
+            editor.notes.bibleOpenRequested.connect(self.open_document)
+            self._connect_bible_menu(editor.notes)
         elif node.kind == BOARD:
             editor = BoardEditor(self._node_title)
             editor.openRequested.connect(self.open_document)
         else:
             editor = ProseEditor()
+            editor.set_bible(self.bible_index)
+            editor.bibleOpenRequested.connect(self.open_document)
+            self._connect_bible_menu(editor)
         editor.node_id = node_id
         editor.set_text(self.project.read_text(node))
         editor.textChanged.connect(self.save_timer.start)
@@ -554,6 +572,7 @@ class MainWindow(QMainWindow):
     def _refresh_outline(self) -> None:
         editor = self.tabs.currentWidget()
         self.outline.set_items(editor.outline() if editor else [])
+        self._refresh_cast()
         if editor:
             self.outline.highlight_line(editor.current_line())
 
@@ -602,17 +621,65 @@ class MainWindow(QMainWindow):
         return None
 
     def open_bible_entry(self, kind: str, name: str) -> None:
-        """Open the entry for a name from a script, creating it in "Story Bible" if needed."""
-        if node_id := self._find_bible_entry(kind, name):
+        """Open the entry for a name (from a script or prose), creating it in the
+        "Story Bible" folder if there isn't one."""
+        known = self.bible_index.lookup(name)
+        if node_id := self._find_bible_entry(kind, name) or (known.node_id if known and known.kind == kind else None):
             self.open_document(node_id)
             return
-        title = name.title()
+        title = name.title() if name.isupper() else name  # MARA → Mara; prose keeps its casing
         node_id = self.binder.add(kind, title, parent=self.binder.folder("Story Bible"), edit=False)
         editor = self.editors.get(node_id)
-        if isinstance(editor, BibleEditor) and title.upper() != name:
-            editor.inputs["script names"].setText(name)
+        if isinstance(editor, BibleEditor) and name.isupper() and title.upper() != name:
+            editor.inputs["aliases"].setText(name)
             editor.textChanged.emit()
+        self.save_all()
+        self._refresh_bible()
         self.statusBar().showMessage(f"Added “{title}” to the Story Bible", 3000)
+
+    def add_bible_alias(self, node_id: str, name: str) -> None:
+        """Record another form of an entry's name, e.g. "Kacprowi" for Kacper."""
+        node = self.project.find(node_id)
+        if node is None:
+            return
+        editor = self.editors.get(node_id)
+        if isinstance(editor, BibleEditor):
+            field = editor.inputs["aliases"]
+            existing = [a.strip() for a in field.text().split(",") if a.strip()]
+            if name.lower() not in (a.lower() for a in existing):
+                field.setText(", ".join(existing + [name]))
+                editor.textChanged.emit()
+            self.save_all()
+        else:
+            fields, notes = bible.parse_entry(self.project.read_text(node))
+            existing = bible.aliases(fields)
+            if name.lower() not in (a.lower() for a in existing):
+                fields["aliases"] = ", ".join(existing + [name])
+                self.project.write_text(node, bible.format_entry(fields, notes))
+        self._refresh_bible()
+        self.statusBar().showMessage(f"“{name}” is now another name for {node.title}", 4000)
+
+    def _connect_bible_menu(self, editor) -> None:
+        editor.bibleAddRequested.connect(self.open_bible_entry)
+        editor.bibleAliasRequested.connect(self.add_bible_alias)
+
+    def _refresh_bible(self) -> None:
+        """Rebuild the name index and hand it to every editor and the cast panel."""
+        entries = [(n.id, n.kind, text) for n, text in self._bible_entries()]
+        self.bible_index = bible.BibleIndex(entries)
+        for editor in self.editors.values():
+            if isinstance(editor, ProseEditor):
+                editor.set_bible(self.bible_index)
+            elif isinstance(editor, BibleEditor):
+                editor.notes.set_bible(self.bible_index)
+            elif isinstance(editor, ScreenplayEditor):
+                editor.bible_index = self.bible_index
+        self._refresh_cast()
+
+    def _refresh_cast(self) -> None:
+        editor = self.tabs.currentWidget()
+        text = editor.search_text() if editor is not None else ""
+        self.cast.set_cast(self.bible_index.cast(text), bool(self.bible_index))
 
     def _node_title(self, node_id: str) -> str:
         item = self.binder.find_item(node_id)

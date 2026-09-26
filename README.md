@@ -36,10 +36,13 @@ Tests: `uv run pytest`
   - Cards come in six colours. Pan with the trackpad, `Space`+drag or middle-drag; zoom with pinch or `Ctrl`+wheel.
   - Drag chapters, scenes or notes from the binder onto a board to get cards linked to them; double-click one to open it.
   - The outline shows the map as a tree, and search covers card text.
-- **Story Bible**: Character (`Ctrl+Alt+C`) and Location (`Ctrl+Alt+L`) entries, each a form (name, name in script, role, age, description) plus free notes.
+- **Story Bible**: Character (`Ctrl+Alt+C`) and Location (`Ctrl+Alt+L`) entries, each a form (name, also called, role, age, description) plus free notes.
+  - *Also called* lists other names and forms, comma-separated: `MARA, the keeper`. For inflected languages, end a form with `*` to match any ending: `Kacpr*` finds Kacpra, Kacprowi, Kacprem…
   - An "Appears in" panel lists where the entry shows up: scenes where a character speaks (with speech and word counts), mentions in scripts and chapters, and scenes set at a location. Click to jump.
-  - Right-click a character name or scene heading in a script to open its entry, or to add one to a "Story Bible" folder.
-  - Bible names are suggested while you type cues and scene headings.
+  - **In prose**, Bible names are underlined as you write. Hover for the entry's description, ⌘/Ctrl-click to open it, and names are offered for completion.
+  - **Right-click** a selection (in prose or a script) to add it to the Bible: as a new character or location, or as *another name for* an existing entry. For example, select "Kacprowi" and add it to Kacper.
+  - In scripts, right-click a character name or scene heading to open its entry or add one. Bible names are suggested while you type cues and headings.
+  - The **Cast** tab in the side panel lists the characters and locations in the current document, with how often each appears.
 - **Corkboard** (double-click a folder, or `Ctrl+Alt+K`): the folder's contents as index cards with title, synopsis, colour label and word count.
   - Drag cards to reorder the binder.
   - Click a selected card (or press F2) to edit its synopsis; double-click or Enter opens it.

@@ -30,10 +30,10 @@ PROSE = "Mara had kept the light.\nOwen came on Mondays; Mara didn't."
 
 
 def test_entry_round_trip():
-    text = format_entry({"name": "Mara Quinn", "script names": "MARA", "role": "", "backstory": "Line one\nline two"}, "Notes here.\n")
-    assert text == "---\nname: Mara Quinn\nscript names: MARA\nbackstory: Line one\n  line two\n---\n\nNotes here.\n"
+    text = format_entry({"name": "Mara Quinn", "aliases": "MARA", "role": "", "backstory": "Line one\nline two"}, "Notes here.\n")
+    assert text == "---\nname: Mara Quinn\naliases: MARA\nbackstory: Line one\n  line two\n---\n\nNotes here.\n"
     fields, notes = parse_entry(text)
-    assert fields == {"name": "Mara Quinn", "script names": "MARA", "backstory": "Line one\nline two"}
+    assert fields == {"name": "Mara Quinn", "aliases": "MARA", "backstory": "Line one\nline two"}
     assert notes == "\nNotes here.\n"
     assert parse_entry("just notes") == ({}, "just notes")
     assert entry_summary(format_entry({"name": "X", "description": "a keeper"}, "")) == "a keeper"
@@ -41,7 +41,7 @@ def test_entry_round_trip():
 
 def test_script_names():
     assert script_names({"name": "Mara Quinn"}) == ["MARA QUINN", "MARA"]
-    assert script_names({"name": "Owen", "script names": "owen, skipper"}) == ["OWEN", "SKIPPER"]
+    assert script_names({"name": "Owen", "aliases": "owen, skipper"}) == ["OWEN", "SKIPPER"]
     assert script_names({"name": "Lamp Room"}, LOCATION) == ["LAMP ROOM"]
     assert script_names({}) == []
 
@@ -68,8 +68,49 @@ def test_location_report():
 
 def test_known_names():
     entries = [
-        (CHARACTER, format_entry({"name": "Mara Quinn", "script names": "MARA, KEEPER"}, "")),
+        (CHARACTER, format_entry({"name": "Mara Quinn", "aliases": "MARA, KEEPER"}, "")),
         (CHARACTER, format_entry({"name": "Owen"}, "")),
         (LOCATION, format_entry({"name": "Lamp Room"}, "")),
     ]
     assert known_names(entries) == (["MARA", "KEEPER", "OWEN"], ["LAMP ROOM"])
+
+
+def test_legacy_script_names_key_becomes_aliases():
+    fields, _ = parse_entry("---\nname: Mara\nscript names: MARA, KEEPER\n---\n")
+    assert fields == {"name": "Mara", "aliases": "MARA, KEEPER"}
+    assert "aliases: MARA, KEEPER" in format_entry(fields, "")
+
+
+def test_location_prose_mentions():
+    report = location_report(["Skerry Rock"], [("p", "Ch 1", "prose", "The light on Skerry Rock.\nskerry rock again")])
+    assert len(report.appearances) == 2
+
+
+def _index():
+    from screenwriter.bible import BibleIndex
+
+    return BibleIndex([
+        ("k", CHARACTER, format_entry({"name": "Kacper", "aliases": "Kacpr*, Kacperek"}, "")),
+        ("m", CHARACTER, format_entry({"name": "Mara Quinn", "description": "the keeper"}, "")),
+        ("l", LOCATION, format_entry({"name": "Skerry Rock"}, "")),
+        ("x", CHARACTER, format_entry({"name": ""}, "")),  # unnamed entries are ignored
+    ])
+
+
+def test_index_matches_inflected_forms():
+    index = _index()
+    text = "Dałem to Kacprowi. Kacperek i Kacper. Mara szła na Skerry Rock z Kacprem, a MARA QUINN patrzyła."
+    found = [(m.group(0), e.node_id) for m, e in index.find(text)]
+    assert found == [
+        ("Kacprowi", "k"), ("Kacperek", "k"), ("Kacper", "k"), ("Mara", "m"),
+        ("Skerry Rock", "l"), ("Kacprem", "k"), ("MARA QUINN", "m"),
+    ]
+    assert index.lookup("KACPRA").node_id == "k"
+    assert index.lookup("Kac") is None
+    assert "Kacpr*" not in index.completions() and "Mara Quinn" in index.completions()
+    assert [(e.node_id, n) for e, n in index.cast(text)] == [("k", 4), ("m", 2), ("l", 1)]
+
+
+def test_stem_alias_in_script_reports():
+    report = character_report(["KACPR*"], [("p", "Rozdział", "prose", "Kacprowi było zimno.")])
+    assert [a.label for a in report.appearances] == ["Kacprowi było zimno."]

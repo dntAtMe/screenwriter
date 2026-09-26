@@ -204,3 +204,55 @@ def test_location_entry_and_completion(window):
     script.moveCursor(QTextCursor.MoveOperation.End)
     QTest.keyClicks(script, "INT. LA")
     assert script.completer.currentCompletion() == "INT. LAMP ROOM"
+
+
+def _prose(window, text):
+    node_id = window.binder.add("prose", "Rozdział", edit=False)
+    window.editors[node_id].set_text(text)
+    return node_id
+
+
+def test_prose_bible_workflow(window):
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QTextCursor
+    from PySide6.QtTest import QTest
+
+    from screenwriter.bible import parse_entry
+
+    prose_id = _prose(window, "Kacper przyszedł. Dałem to Kacprowi.\n")
+    prose = window.editors[prose_id]
+
+    # a name selected in prose becomes a character, keeping its casing
+    window.open_bible_entry("character", "Kacper")
+    entry_id = window.bible_index.lookup("Kacper").node_id
+    assert window.binder.find_item(entry_id).text(0) == "Kacper"
+    assert [m.group(0) for m, _ in prose.bible.find(prose.text())] == ["Kacper"]
+
+    # "Kacprowi" added as another form of Kacper, with the entry closed
+    window.close_tab(window.tabs.indexOf(window.editors[entry_id]))
+    window.add_bible_alias(entry_id, "Kacprowi")
+    fields, _ = parse_entry(window.project.read_text(window.project.find(entry_id)))
+    assert fields["aliases"] == "Kacprowi"
+    assert [m.group(0) for m, _ in prose.bible.find(prose.text())] == ["Kacper", "Kacprowi"]
+
+    # ...and a stem with the entry open in a tab
+    window.open_document(entry_id)
+    window.add_bible_alias(entry_id, "Kacpr*")
+    assert window.editors[entry_id].inputs["aliases"].text() == "Kacprowi, Kacpr*"
+    assert window.bible_index.lookup("Kacprem").node_id == entry_id
+
+    # cast panel for the chapter
+    window.tabs.setCurrentWidget(prose)
+    window._refresh_outline()
+    labels = [window.cast.topLevelItem(0).child(i).text(0) for i in range(window.cast.topLevelItem(0).childCount())]
+    assert any(label.startswith("Kacper") and label.endswith("2") for label in labels)
+
+    # completion while writing prose
+    prose.moveCursor(QTextCursor.MoveOperation.End)
+    QTest.keyClicks(prose, "Potem Kac")
+    assert prose.completer.popup().isVisible() and prose.completer.currentCompletion() == "Kacper"
+
+    # hover / ⌘-click target
+    cursor = prose.textCursor()
+    cursor.setPosition(2)
+    assert prose.bible_at(prose.cursorRect(cursor).center()).node_id == entry_id
