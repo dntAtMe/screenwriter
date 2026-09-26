@@ -24,6 +24,12 @@ Tests: `uv run pytest`
   - `Enter` moves to the next logical element; `Shift+Enter` gives a plain line break.
   - `Ctrl+1…6` turns the line into Scene Heading, Action, Character, Parenthetical, Dialogue or Transition.
   - Undo works word by word and never replays stale formatting.
+- **Boards** (`Ctrl+Alt+B`): a canvas of cards for mind maps and corkboards.
+  - Double-click to add a card. `Tab` adds a connected child card; `Enter` adds a sibling.
+  - `Alt`+drag from one card to another connects them. Drag to move; drag on empty space to select several.
+  - Cards come in six colours. Pan with the trackpad, `Space`+drag or middle-drag; zoom with pinch or `Ctrl`+wheel.
+  - Drag chapters, scenes or notes from the binder onto a board to get cards linked to them; double-click one to open it.
+  - The outline shows the map as a tree, and search covers card text.
 - **Outline** (`Ctrl+Shift+O`): numbered scenes under their sections for scripts, headings for prose. Click to jump; it follows the cursor.
 - **Search** (`Ctrl+Shift+F`): matches across the whole project, grouped by document. **Find** (`Ctrl+F`, `Ctrl+G`) searches the current document.
 - **Idea capture** (`Ctrl+Shift+I`): jot an idea from anywhere; it lands, timestamped, in the project's Idea Inbox note.
@@ -41,6 +47,7 @@ My Story/
   project.json          binder tree + metadata
   docs/<id>.md          prose and notes
   docs/<id>.fountain    screenplays
+  docs/<id>.board.json  boards (cards + links)
 ```
 
 `project.json` also records which note is the Idea Inbox.
@@ -51,6 +58,6 @@ My Story/
 2. ~~Prose editor~~
 3. ~~Fountain screenplay editor~~, smart formatting, completion, outline
 4. ~~Ideas inbox with quick capture, project-wide search~~
-5. Mind map / corkboard canvas (`QGraphicsView`)
+5. ~~Mind map / corkboard canvas~~
 6. Export: PDF (screenplay page format), Final Draft `.fdx`, `.docx`/EPUB via Pandoc
 7. Snapshots / version history

@@ -68,3 +68,33 @@ def test_add_idea_creates_inbox_when_missing(window):
     inbox = window.project.find(window.project.inbox_id)
     assert inbox.title == "Idea Inbox"
     assert window.binder.find_item(inbox.id) is not None
+
+
+def test_board_document(window):
+    window.open_document("storymap")
+    board = window.editors["storymap"]
+    assert board.stats() == "8 cards · 7 links"
+    window._refresh_outline()
+    from PySide6.QtWidgets import QTreeWidgetItemIterator
+
+    labels = []
+    it = QTreeWidgetItemIterator(window.outline)
+    while it.value():
+        labels.append(it.value().text(0))
+        it += 1
+    assert labels[:3] == ["The Lighthouse", "Mara Quinn", "Did the lamp ever go dark?"]
+    assert len(labels) == 8
+    window.search.query.setText("skipper")
+    window.search.run()
+    titles = {window.search.results.topLevelItem(i).text(0) for i in range(window.search.results.topLevelItemCount())}
+    assert "Story Map  (1)" in titles
+    window.open_at("storymap", board.search_text().index("skipper"), 7)
+    assert [c.card.id for c in board._selected_cards()] == ["owen"]
+    board.add_card(0, 400, "New idea", edit=False)
+    window.save_all()
+    assert "New idea" in window.project.read_text(window.project.find("storymap"))
+
+
+def test_find_bar_ignores_board(window):
+    window.open_document("storymap")
+    assert window._current_text_editor() is None

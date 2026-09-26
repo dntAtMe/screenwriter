@@ -7,7 +7,7 @@ from PySide6.QtGui import QColor, QFont, QSyntaxHighlighter, QTextCharFormat
 from PySide6.QtWidgets import QFrame, QPlainTextEdit
 
 from ..fountain import OutlineItem
-from .common import center_column, first_available_font, paint_margins_as_page, word_count
+from .common import TextDocumentAPI, center_column, first_available_font, paint_margins_as_page, word_count
 
 COLUMN_CHARS = 70
 
@@ -69,7 +69,7 @@ def markdown_outline(text: str) -> list[OutlineItem]:
     return items
 
 
-class ProseEditor(QPlainTextEdit):
+class ProseEditor(TextDocumentAPI, QPlainTextEdit):
     statsChanged = Signal()
 
     def __init__(self, parent=None):

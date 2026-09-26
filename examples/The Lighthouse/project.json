@@ -8,8 +8,16 @@
       "title": "Manuscript",
       "kind": "folder",
       "children": [
-        {"id": "ch01", "title": "Chapter 1 — The Keeper", "kind": "prose"},
-        {"id": "ch02", "title": "Chapter 2 — Fog", "kind": "prose"}
+        {
+          "id": "ch01",
+          "title": "Chapter 1 — The Keeper",
+          "kind": "prose"
+        },
+        {
+          "id": "ch02",
+          "title": "Chapter 2 — Fog",
+          "kind": "prose"
+        }
       ],
       "expanded": true
     },
@@ -18,7 +26,11 @@
       "title": "Screenplay",
       "kind": "folder",
       "children": [
-        {"id": "pilot", "title": "Pilot", "kind": "screenplay"}
+        {
+          "id": "pilot",
+          "title": "Pilot",
+          "kind": "screenplay"
+        }
       ],
       "expanded": true
     },
@@ -27,11 +39,28 @@
       "title": "Notes & Ideas",
       "kind": "folder",
       "children": [
-        {"id": "characters", "title": "Characters", "kind": "note"},
-        {"id": "ideas", "title": "Idea Inbox", "kind": "note"}
+        {
+          "id": "storymap",
+          "title": "Story Map",
+          "kind": "board"
+        },
+        {
+          "id": "characters",
+          "title": "Characters",
+          "kind": "note"
+        },
+        {
+          "id": "ideas",
+          "title": "Idea Inbox",
+          "kind": "note"
+        }
       ],
       "expanded": true
     },
-    {"id": "trash", "title": "Trash", "kind": "trash"}
+    {
+      "id": "trash",
+      "title": "Trash",
+      "kind": "trash"
+    }
   ]
 }

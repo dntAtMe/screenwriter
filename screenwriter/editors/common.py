@@ -29,6 +29,27 @@ def paint_margins_as_page(editor: QAbstractScrollArea) -> None:
     editor.setAutoFillBackground(True)
 
 
+class TextDocumentAPI:
+    """What the main window needs from an editor, beyond text()/set_text()/outline().
+    The board editor implements the same methods for its canvas."""
+
+    def search_text(self) -> str:
+        return self.toPlainText()
+
+    def reveal(self, pos: int, length: int = 0) -> None:
+        goto(self, pos, length)
+
+    def jump_to_line(self, line: int) -> None:
+        goto_line(self, line)
+
+    def current_line(self) -> int:
+        return self.textCursor().blockNumber()
+
+    def selected_text(self) -> str:
+        text = self.textCursor().selectedText()
+        return "" if "\u2029" in text else text  # no multi-line selections
+
+
 def goto(editor, pos: int, length: int = 0) -> None:
     """Select `length` characters at plain-text offset `pos` and scroll them into view."""
     size = editor.document().characterCount() - 1

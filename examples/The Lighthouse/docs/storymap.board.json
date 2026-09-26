@@ -1,0 +1,101 @@
+{
+  "cards": [
+    {
+      "id": "hub",
+      "x": 0,
+      "y": 120,
+      "w": 200,
+      "text": "The Lighthouse\nA keeper, a stranger, a lie in the log",
+      "color": "purple"
+    },
+    {
+      "id": "mara",
+      "x": 290,
+      "y": 0,
+      "text": "Mara Quinn\nkeeper, 40s",
+      "color": "yellow",
+      "doc": "characters",
+      "w": 180
+    },
+    {
+      "id": "owen",
+      "x": 290,
+      "y": 80,
+      "text": "Owen\nsupply-boat skipper",
+      "color": "yellow",
+      "w": 180
+    },
+    {
+      "id": "young",
+      "x": 290,
+      "y": 160,
+      "text": "The Young Man\nwho is he?",
+      "color": "yellow",
+      "w": 180
+    },
+    {
+      "id": "theme",
+      "x": 290,
+      "y": 250,
+      "text": "Theme: what the sea is given",
+      "color": "green",
+      "w": 180
+    },
+    {
+      "id": "ch1",
+      "x": -290,
+      "y": 60,
+      "text": "Chapter 1 — The Keeper",
+      "color": "blue",
+      "doc": "ch01",
+      "w": 180
+    },
+    {
+      "id": "pilot",
+      "x": -290,
+      "y": 150,
+      "text": "Pilot",
+      "color": "blue",
+      "doc": "pilot",
+      "w": 180
+    },
+    {
+      "id": "lie",
+      "x": 560,
+      "y": 0,
+      "text": "Did the lamp ever go dark?",
+      "color": "pink",
+      "w": 180
+    }
+  ],
+  "links": [
+    {
+      "a": "hub",
+      "b": "mara"
+    },
+    {
+      "a": "hub",
+      "b": "owen"
+    },
+    {
+      "a": "hub",
+      "b": "young"
+    },
+    {
+      "a": "hub",
+      "b": "theme"
+    },
+    {
+      "a": "hub",
+      "b": "ch1"
+    },
+    {
+      "a": "hub",
+      "b": "pilot"
+    },
+    {
+      "a": "mara",
+      "b": "lie"
+    }
+  ]
+}

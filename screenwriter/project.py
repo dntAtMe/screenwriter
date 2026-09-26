@@ -6,6 +6,7 @@ A project is a plain folder, readable and git-friendly without the app:
       project.json          binder tree + metadata
       docs/<id>.md          prose and notes (Markdown)
       docs/<id>.fountain    screenplays (Fountain)
+      docs/<id>.board.json  boards: mind maps / corkboards (see board.py)
 """
 
 from __future__ import annotations
@@ -20,9 +21,9 @@ FORMAT_VERSION = 1
 PROJECT_FILE = "project.json"
 DOCS_DIR = "docs"
 
-FOLDER, PROSE, SCREENPLAY, NOTE, TRASH = "folder", "prose", "screenplay", "note", "trash"
-DOCUMENT_KINDS = (PROSE, SCREENPLAY, NOTE)
-EXTENSIONS = {PROSE: ".md", NOTE: ".md", SCREENPLAY: ".fountain"}
+FOLDER, PROSE, SCREENPLAY, NOTE, BOARD, TRASH = "folder", "prose", "screenplay", "note", "board", "trash"
+DOCUMENT_KINDS = (PROSE, SCREENPLAY, NOTE, BOARD)
+EXTENSIONS = {PROSE: ".md", NOTE: ".md", SCREENPLAY: ".fountain", BOARD: ".board.json"}
 
 
 @dataclass

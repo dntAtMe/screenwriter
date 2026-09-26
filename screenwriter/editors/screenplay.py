@@ -41,7 +41,7 @@ import re
 from .. import fountain
 from ..fountain import AFTER_BREAK, EL_NAMES, IN_DIALOGUE, SCENE_PREFIXES, SCENE_RE, El, classify
 from .history import TextHistory
-from .common import center_column, first_available_font, paint_margins_as_page, word_count
+from .common import TextDocumentAPI, center_column, first_available_font, paint_margins_as_page, word_count
 
 PAGE_CHARS = 60  # 6" of Courier 12pt at 10 characters per inch
 LINES_PER_PAGE = 55
@@ -117,7 +117,7 @@ class FountainHighlighter(QSyntaxHighlighter):
             self.setFormat(len(text) - len(stripped), 1, _fmt(color=self.GREY))
 
 
-class ScreenplayEditor(QTextEdit):
+class ScreenplayEditor(TextDocumentAPI, QTextEdit):
     statsChanged = Signal()
     elementChanged = Signal(str)
 

@@ -4,13 +4,14 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QAction, QColor, QFont, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import QAbstractItemView, QMenu, QMessageBox, QStyle, QTreeWidget, QTreeWidgetItem
 
-from .project import DOCUMENT_KINDS, FOLDER, NOTE, PROSE, SCREENPLAY, TRASH, Node, Project, walk
+from .editors.board import NODE_MIME
+from .project import BOARD, DOCUMENT_KINDS, FOLDER, NOTE, PROSE, SCREENPLAY, TRASH, Node, Project, walk
 
 ID_ROLE = Qt.ItemDataRole.UserRole
 KIND_ROLE = Qt.ItemDataRole.UserRole + 1
 
-KIND_LABELS = {PROSE: "Prose Document", SCREENPLAY: "Screenplay", NOTE: "Note", FOLDER: "Folder"}
-DEFAULT_TITLES = {PROSE: "Untitled Chapter", SCREENPLAY: "Untitled Screenplay", NOTE: "Untitled Note", FOLDER: "New Folder"}
+KIND_LABELS = {PROSE: "Prose Document", SCREENPLAY: "Screenplay", NOTE: "Note", BOARD: "Board", FOLDER: "Folder"}
+DEFAULT_TITLES = {PROSE: "Untitled Chapter", SCREENPLAY: "Untitled Screenplay", NOTE: "Untitled Note", BOARD: "Untitled Board", FOLDER: "New Folder"}
 
 
 def _letter_icon(letter: str, color: str) -> QIcon:
@@ -56,6 +57,7 @@ class Binder(QTreeWidget):
             PROSE: _letter_icon("P", "#4f7cac"),
             SCREENPLAY: _letter_icon("S", "#b5563c"),
             NOTE: _letter_icon("N", "#6b8f4e"),
+            BOARD: _letter_icon("B", "#8a63b8"),
         }
 
         self.itemClicked.connect(self._on_open)
@@ -203,6 +205,12 @@ class Binder(QTreeWidget):
         self.renamed.emit(item.data(0, ID_ROLE), item.text(0))
         self.structureChanged.emit()
 
+    def mimeData(self, items):
+        """Binder drags also carry node ids, so boards can accept them."""
+        data = super().mimeData(items)
+        data.setData(NODE_MIME, ",".join(i.data(0, ID_ROLE) for i in items).encode())
+        return data
+
     def dropEvent(self, event):
         super().dropEvent(event)
         # The trash always stays at the bottom of the top level.
@@ -226,7 +234,7 @@ class Binder(QTreeWidget):
         if item:
             self.setCurrentItem(item)
         menu = QMenu(self)
-        for kind in (PROSE, SCREENPLAY, NOTE, FOLDER):
+        for kind in (PROSE, SCREENPLAY, NOTE, BOARD, FOLDER):
             action = QAction(self.icons[kind], f"New {KIND_LABELS[kind]}", menu)
             action.triggered.connect(lambda _=False, k=kind: self.add(k))
             menu.addAction(action)

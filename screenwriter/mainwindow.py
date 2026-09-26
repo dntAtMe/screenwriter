@@ -20,14 +20,15 @@ from PySide6.QtWidgets import (
 
 from .binder import Binder
 from .capture import QuickCapture, append_idea, format_idea
-from .editors.common import goto, goto_line
+from . import board
+from .editors.board import BoardEditor
 from .outline import OutlinePanel
 from .search import FindBar, SearchPanel
 from .editors.prose import ProseEditor
 from .editors.screenplay import ScreenplayEditor
 from .editors import screenplay
 from .fountain import EL_NAMES
-from .project import DOCUMENT_KINDS, FOLDER, NOTE, PROSE, SCREENPLAY, TRASH, Project, walk
+from .project import BOARD, DOCUMENT_KINDS, FOLDER, NOTE, PROSE, SCREENPLAY, TRASH, Project, walk
 
 APP_NAME = "Screenwriter"
 MAX_RECENT = 8
@@ -93,7 +94,7 @@ class MainWindow(QMainWindow):
         self.tabs.tabCloseRequested.connect(self.close_tab)
         self.tabs.currentChanged.connect(self._on_tab_changed)
 
-        self.find_bar = FindBar(self.tabs.currentWidget)
+        self.find_bar = FindBar(self._current_text_editor)
         center = QWidget()
         center_layout = QVBoxLayout(center)
         center_layout.setContentsMargins(0, 0, 0, 0)
@@ -185,6 +186,7 @@ class MainWindow(QMainWindow):
             (PROSE, "New Prose Document", "Ctrl+N"),
             (SCREENPLAY, "New Screenplay", "Ctrl+Alt+N"),
             (NOTE, "New Note", "Ctrl+Shift+J"),
+            (BOARD, "New Board", "Ctrl+Alt+B"),
             (FOLDER, "New Folder", "Ctrl+Shift+G"),
         ):
             self.project_actions.append(self._action(insert, label, lambda _=False, k=kind: self.binder.add(k), shortcut))
@@ -213,6 +215,7 @@ class MainWindow(QMainWindow):
 
         help_menu = bar.addMenu("&Help")
         self._action(help_menu, "Screenplay Keys", self.show_screenplay_help)
+        self._action(help_menu, "Board Keys", self.show_board_help)
 
     def _set_project_actions_enabled(self, enabled: bool) -> None:
         for action in self.project_actions:
@@ -311,7 +314,13 @@ class MainWindow(QMainWindow):
         node = self.project.find(node_id)
         if node is None:
             return
-        editor = ScreenplayEditor() if node.kind == SCREENPLAY else ProseEditor()
+        if node.kind == SCREENPLAY:
+            editor = ScreenplayEditor()
+        elif node.kind == BOARD:
+            editor = BoardEditor(self._node_title)
+            editor.openRequested.connect(self.open_document)
+        else:
+            editor = ProseEditor()
         editor.node_id = node_id
         editor.set_text(self.project.read_text(node))
         editor.textChanged.connect(self.save_timer.start)
@@ -386,7 +395,7 @@ class MainWindow(QMainWindow):
     def open_at(self, node_id: str, pos: int, length: int) -> None:
         self.open_document(node_id)
         if editor := self.editors.get(node_id):
-            goto(editor, pos, length)
+            editor.reveal(pos, length)
 
     def _searchable_documents(self) -> list[tuple[str, str, str]]:
         if self.project is None:
@@ -398,7 +407,13 @@ class MainWindow(QMainWindow):
         for node in walk(self.project.root):
             if node.kind in DOCUMENT_KINDS and node.id not in trashed:
                 editor = self.editors.get(node.id)
-                docs.append((node.id, node.title, editor.text() if editor else self.project.read_text(node)))
+                if editor:
+                    text = editor.search_text()
+                elif node.kind == BOARD:
+                    text = board.search_text(self.project.read_text(node))
+                else:
+                    text = self.project.read_text(node)
+                docs.append((node.id, node.title, text))
         return docs
 
     # --- outline ------------------------------------------------------------------
@@ -411,15 +426,25 @@ class MainWindow(QMainWindow):
         editor = self.tabs.currentWidget()
         self.outline.set_items(editor.outline() if editor else [])
         if editor:
-            self.outline.highlight_line(editor.textCursor().blockNumber())
+            self.outline.highlight_line(editor.current_line())
 
     def _on_cursor_moved(self, editor) -> None:
         if editor is self.tabs.currentWidget():
-            self.outline.highlight_line(editor.textCursor().blockNumber())
+            self.outline.highlight_line(editor.current_line())
+            if isinstance(editor, BoardEditor):
+                self._refresh_outline()
 
     def _jump_to_line(self, line: int) -> None:
         if editor := self.tabs.currentWidget():
-            goto_line(editor, line)
+            editor.jump_to_line(line)
+
+    def _current_text_editor(self):
+        editor = self.tabs.currentWidget()
+        return None if isinstance(editor, BoardEditor) else editor
+
+    def _node_title(self, node_id: str) -> str:
+        item = self.binder.find_item(node_id)
+        return item.text(0) if item else ""
 
     # --- ideas --------------------------------------------------------------------
 
@@ -466,8 +491,7 @@ class MainWindow(QMainWindow):
         self.side.show()
         self.side.setCurrentWidget(self.search)
         editor = self.tabs.currentWidget()
-        selected = editor.textCursor().selectedText() if editor else ""
-        self.search.focus(selected if "\u2029" not in selected else "")
+        self.search.focus(editor.selected_text() if editor else "")
 
     def toggle_focus(self) -> None:
         focused = self.binder.isVisible()
@@ -487,6 +511,11 @@ class MainWindow(QMainWindow):
 
     def show_screenplay_help(self) -> None:
         QMessageBox.information(self, "Screenplay Keys", screenplay.__doc__.split("Keys:", 1)[1].strip("\n"))
+
+    def show_board_help(self) -> None:
+        from .editors import board as board_editor
+
+        QMessageBox.information(self, "Board Keys", board_editor.__doc__.split("\n\n", 1)[1].strip("\n"))
 
     def closeEvent(self, event) -> None:
         self.settings.setValue("geometry", self.saveGeometry())
