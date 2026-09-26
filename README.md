@@ -1,86 +1,67 @@
-# Screenwriter
+<p align="center"><img src="screenwriter/resources/icon.png" width="112" alt=""></p>
 
-A personal, tunable writing app for screenplays, books, notes and ideas, built with Qt (PySide6).
+<h1 align="center">Screenwriter</h1>
 
-## Run
+<p align="center">A writing app for screenplays, books, notes and ideas — for macOS, Windows and Linux.</p>
+
+<p align="center">
+  <a href="https://github.com/dntAtMe/screenwriter/releases/latest"><b>Download</b></a> ·
+  <a href="docs/user-guide.md">User guide</a> ·
+  <a href="docs/installing.md">Installing</a> ·
+  <a href="CHANGELOG.md">What's new</a>
+</p>
+
+![A screenplay in Screenwriter, with the scene outline on the right](docs/images/screenplay.png)
+
+## What it does
+
+- **Screenplays that format themselves.** Type plain [Fountain](https://fountain.io) and it's laid out like a script page: `int` becomes `INT.`, a name in caps becomes a character cue, `cut to` becomes a transition. Character names, locations and times of day are suggested as you type.
+- **Books and chapters.** A calm, centred writing column with Markdown, word counts, and chapters you can reorder in the binder.
+- **A Story Bible.** Character and location sheets that know where they appear: scenes where a character speaks, how much they say, and every mention in your chapters. Names are underlined in your prose; alternative forms (nicknames, *Kacprowi* for Kacper, or `Kacpr*` for every ending) are recognised too.
+- **Mind maps and corkboards.** Brainstorm on a canvas of cards, or see a folder of chapters as index cards with synopses and drag them into order.
+- **Ideas, search, outline.** Capture an idea from anywhere, search the whole project, and jump through scenes or headings from the outline.
+- **Export.** Industry-format screenplay PDF, Final Draft (`.fdx`), manuscript PDF and Word (`.docx`), Markdown, and board images.
+- **Nothing gets lost.** Autosave, daily snapshots of every document, word-by-word comparison with earlier versions, and restore.
+- **Your files stay yours.** A project is an ordinary folder of Markdown and Fountain text files — readable without the app, easy to back up or keep in git.
+
+| | |
+|---|---|
+| ![Prose with Story Bible names underlined and the Cast panel](docs/images/prose.png) | ![A Story Bible character entry and where she appears](docs/images/story-bible.png) |
+| ![A mind map board](docs/images/board.png) | ![A folder of chapters as a corkboard](docs/images/corkboard.png) |
+
+## Install
+
+Download the file for your system from the [latest release](https://github.com/dntAtMe/screenwriter/releases/latest):
+
+| System | File | |
+|---|---|---|
+| macOS (Apple Silicon) | `Screenwriter-…-macos-arm64.dmg` | open it and drag Screenwriter to Applications |
+| macOS (Intel) | `Screenwriter-…-macos-intel.dmg` | when available for that release |
+| Windows 10/11 | `Screenwriter-…-windows-x64-setup.exe` | or the portable `.zip` |
+| Linux (x86-64) | `Screenwriter-…-linux-x86_64.AppImage` | `chmod +x` it and run; or the `.tar.gz` |
+
+The app isn't code-signed yet, so macOS and Windows warn the first time you open it —
+[Installing](docs/installing.md) shows how to get past that, step by step.
+
+## Getting started
+
+1. **File → New Project…**, give it a name and pick where the project folder goes.
+2. Add a screenplay (`Ctrl+Alt+N`), a chapter (`Ctrl+N`), a board (`Ctrl+Alt+B`) or a character (`Ctrl+Alt+C`) — or right-click in the binder on the left.
+3. Start writing. Everything saves automatically.
+
+Want to look around first? Open the sample project, *The Lighthouse* — download the source (or clone the repo) and open the `examples/The Lighthouse` folder with **File → Open Project…** (copy it somewhere first if you'll edit it).
+
+The [user guide](docs/user-guide.md) covers every feature and shortcut. On macOS, `Ctrl` in shortcuts means `⌘`.
+
+## Contributing and building from source
+
+Screenwriter is written in Python with Qt (PySide6). To run it from source you need [uv](https://docs.astral.sh/uv/):
 
 ```bash
-uv run python -m screenwriter                               # reopens the last project
-uv run python -m screenwriter ~/Documents/"My Story"        # open a specific project
+git clone https://github.com/dntAtMe/screenwriter && cd screenwriter
+uv run python -m screenwriter
 ```
 
-To try the sample, copy it first so your edits don't end up in the repo:
+See [Development](docs/development.md) for tests, packaging and how releases are made. Bug reports and ideas are welcome in [Issues](https://github.com/dntAtMe/screenwriter/issues).
 
-```bash
-cp -R "examples/The Lighthouse" ~/Documents/ && uv run python -m screenwriter ~/Documents/"The Lighthouse"
-```
-
-Tests: `uv run pytest`
-
-## What's there
-
-- **Binder**: a tree of folders and documents (prose, screenplay, note). Drag to reorder or nest. Right-click to add, rename or trash. Items in the Trash can be deleted permanently.
-- **Prose editor**: Markdown in a centred serif column, with live headings, *emphasis* and `[[inline notes]]`, plus word count (including selection).
-- **Screenplay editor**: [Fountain](https://fountain.io) text laid out like a script page, with scene headings, character cues, parentheticals, dialogue, transitions, sections, synopses and notes. Formatting follows what you type:
-  - `int`/`ext`/`i/e` + space becomes `INT.`/`EXT.`/`INT./EXT.`; headings and transitions are capitalised.
-  - `cut to`, `fade out` or `dissolve to` + Enter becomes a proper transition.
-  - A line in caps becomes a character cue; the dialogue under it is indented. A caps word starting an action line doesn't jump.
-  - Completion for character names (plus `V.O.`, `O.S.`, `CONT'D`), locations and times of day, taken from your script.
-  - `Tab` starts a cue on a new line, or adds `()` in dialogue. Parentheses close themselves.
-  - `Enter` moves to the next logical element; `Shift+Enter` gives a plain line break.
-  - `Ctrl+1…6` turns the line into Scene Heading, Action, Character, Parenthetical, Dialogue or Transition.
-  - Undo works word by word and never replays stale formatting.
-- **Boards** (`Ctrl+Alt+B`): a canvas of cards for mind maps and corkboards.
-  - Double-click to add a card. `Tab` adds a connected child card; `Enter` adds a sibling.
-  - `Alt`+drag from one card to another connects them. Drag to move; drag on empty space to select several.
-  - Cards come in six colours. Pan with the trackpad, `Space`+drag or middle-drag; zoom with pinch or `Ctrl`+wheel.
-  - Drag chapters, scenes or notes from the binder onto a board to get cards linked to them; double-click one to open it.
-  - The outline shows the map as a tree, and search covers card text.
-- **Story Bible**: Character (`Ctrl+Alt+C`) and Location (`Ctrl+Alt+L`) entries, each a form (name, also called, role, age, description) plus free notes.
-  - *Also called* lists other names and forms, comma-separated: `MARA, the keeper`. For inflected languages, end a form with `*` to match any ending: `Kacpr*` finds Kacpra, Kacprowi, Kacprem…
-  - An "Appears in" panel lists where the entry shows up: scenes where a character speaks (with speech and word counts), mentions in scripts and chapters, and scenes set at a location. Click to jump.
-  - **In prose**, Bible names are underlined as you write. Hover for the entry's description, ⌘/Ctrl-click to open it, and names are offered for completion.
-  - **Right-click** a selection (in prose or a script) to add it to the Bible: as a new character or location, or as *another name for* an existing entry. For example, select "Kacprowi" and add it to Kacper.
-  - In scripts, right-click a character name or scene heading to open its entry or add one. Bible names are suggested while you type cues and headings.
-  - The **Cast** tab in the side panel lists the characters and locations in the current document, with how often each appears.
-- **Corkboard** (double-click a folder, or `Ctrl+Alt+K`): the folder's contents as index cards with title, synopsis, colour label and word count.
-  - Drag cards to reorder the binder.
-  - Click a selected card (or press F2) to edit its synopsis; double-click or Enter opens it.
-  - Right-click for labels, rename, new cards, or trash.
-- **Outline** (`Ctrl+Shift+O`): numbered scenes under their sections for scripts, headings for prose. Click to jump; it follows the cursor.
-- **Search** (`Ctrl+Shift+F`): matches across the whole project, grouped by document. **Find** (`Ctrl+F`, `Ctrl+G`) searches the current document.
-- **Idea capture** (`Ctrl+Shift+I`): jot an idea from anywhere; it lands, timestamped, in the project's Idea Inbox note.
-- **Export** (`Ctrl+E`, for the item selected in the binder):
-  - Screenplays: industry-format **PDF** (Courier 12pt, standard margins and indents, a title page from Fountain `Title:`/`Author:`/… lines, page numbers, scene headings kept with what follows, `(MORE)`/`(CONT'D)` when dialogue breaks across pages), **Final Draft `.fdx`** and **Fountain**.
-  - Prose: one chapter, or a whole folder compiled in binder order, as **PDF**, **Word `.docx`** (standard manuscript format: Times 12pt, double spaced, chapters on new pages) or **Markdown**. `[[notes]]` are left out.
-  - Boards: **PNG** or **PDF** image.
-- **Snapshots** (`Ctrl+Alt+S` to take one, `Ctrl+Alt+H` to browse): named versions of a document, plus an automatic one the first time you save it each day. Compare any version with the current text word by word, and restore it; the current text is kept as a snapshot first, and the restore can be undone.
-- **Autosave** shortly after you stop typing, and on tab switch or close. Open tabs are restored per project.
-- **Focus mode** (`Ctrl+Shift+D`), full screen, zoom.
-
-On macOS, `Ctrl` in these shortcuts is `⌘`.
-
-## Project format
-
-A project is a plain folder, so it can be read, diffed and versioned without the app:
-
-```
-My Story/
-  project.json          binder tree + metadata (synopses, labels)
-  docs/<id>.md          prose, notes, and story bible entries (front-matter header + notes)
-  docs/<id>.fountain    screenplays
-  docs/<id>.board.json  boards (cards + links)
-  snapshots/<id>/       earlier versions of each document
-```
-
-`project.json` also records which note is the Idea Inbox.
-
-## Roadmap
-
-1. ~~App shell, binder, project format~~
-2. ~~Prose editor~~
-3. ~~Fountain screenplay editor~~, smart formatting, completion, outline
-4. ~~Ideas inbox with quick capture, project-wide search~~
-5. ~~Mind map / corkboard canvas~~
-6. ~~Export: screenplay PDF, Final Draft, manuscript PDF/Word/Markdown, board images~~ (EPUB via Pandoc: later)
-7. ~~Snapshots / version history~~
+The app bundles Qt and PySide6, which are available under the LGPLv3.
