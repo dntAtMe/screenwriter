@@ -1,0 +1,123 @@
+name: Release
+
+# Push a tag like v0.2.0 to build every platform and publish a GitHub Release.
+# Run it by hand (Actions → Release → Run workflow) to build without publishing.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tag matches the code and CHANGELOG
+        if: startsWith(github.ref, 'refs/tags/')
+        run: python3 packaging/release.py check "$GITHUB_REF_NAME"
+      - id: v
+        run: echo "version=$(python3 packaging/release.py version)" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: version
+    name: Build (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: macos-arm64, os: macos-latest }
+          - { name: macos-intel, os: macos-15-intel, optional: true }
+          - { name: windows-x64, os: windows-latest }
+          - { name: linux-x86_64, os: ubuntu-22.04 }
+    runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.optional == true }}
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Qt system libraries
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libgl1 libxkbcommon0 libxkbcommon-x11-0 libfontconfig1 libdbus-1-3 libxcb-cursor0 libxcb-icccm4 libxcb-keysyms1 libxcb-shape0
+
+      - run: uv sync --locked --group build
+      - run: uv run pytest -q
+        env:
+          QT_QPA_PLATFORM: offscreen
+      - run: uv run pyinstaller packaging/screenwriter.spec --noconfirm
+
+      # Start the packaged app on the sample project and export every format.
+      - name: Smoke test (macOS)
+        if: runner.os == 'macOS'
+        env: { SCREENWRITER_SMOKE_TEST: "1", SCREENWRITER_SMOKE_EXPORT: build/smoke, QT_QPA_PLATFORM: offscreen }
+        run: dist/Screenwriter.app/Contents/MacOS/Screenwriter "examples/The Lighthouse" && ls build/smoke | tee /dev/stderr | grep -q pilot-final.fdx
+      - name: Smoke test (Linux)
+        if: runner.os == 'Linux'
+        env: { SCREENWRITER_SMOKE_TEST: "1", SCREENWRITER_SMOKE_EXPORT: build/smoke, QT_QPA_PLATFORM: offscreen }
+        run: dist/Screenwriter/Screenwriter "examples/The Lighthouse" && ls build/smoke | tee /dev/stderr | grep -q pilot-final.fdx
+      - name: Smoke test (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env: { SCREENWRITER_SMOKE_TEST: "1", SCREENWRITER_SMOKE_EXPORT: build\smoke, QT_QPA_PLATFORM: offscreen }
+        run: |
+          $p = Start-Process -FilePath dist\Screenwriter\Screenwriter.exe -ArgumentList '"examples\The Lighthouse"' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "app exited with $($p.ExitCode)" }
+          Get-ChildItem build\smoke
+          if (-not (Test-Path build\smoke\pilot-final.fdx)) { throw "export smoke test failed" }
+
+      - name: Package (macOS)
+        if: runner.os == 'macOS'
+        run: packaging/macos/make_dmg.sh "$VERSION" "${{ matrix.name == 'macos-arm64' && 'arm64' || 'intel' }}" out
+      - name: Package (Linux)
+        if: runner.os == 'Linux'
+        run: uv run bash packaging/linux/make_packages.sh "$VERSION" out
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force out, build | Out-Null
+          Compress-Archive -Path dist\Screenwriter -DestinationPath "out\Screenwriter-$env:VERSION-windows-x64-portable.zip"
+          uv run python -c "from PIL import Image; Image.open('screenwriter/resources/icon.png').save('build/icon.ico', sizes=[(16,16),(24,24),(32,32),(48,48),(64,64),(128,128),(256,256)])"
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress; }
+          & $iscc /Q "/DAppVersion=$env:VERSION" "/DSourceDir=$PWD\dist\Screenwriter" "/DOutputDir=$PWD\out" "/DIconFile=$PWD\build\icon.ico" packaging\windows\installer.iss
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed" }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: screenwriter-${{ matrix.name }}
+          path: out/*
+          if-no-files-found: error
+
+  publish:
+    needs: [version, build]
+    if: startsWith(github.ref, 'refs/tags/') && !cancelled()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+      - name: Checksums
+        run: cd out && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
+      - name: Create the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          python3 packaging/release.py notes "$VERSION" > build-notes.md
+          cat >> build-notes.md <<'MD'
+
+          ---
+          **Downloads:** macOS `.dmg`, Windows `-setup.exe` (or the portable `.zip`), Linux `.AppImage` (or `.tar.gz`).
+          First launch on macOS/Windows shows a security warning because the app isn't signed yet —
+          see [Installing](https://github.com/dntAtMe/screenwriter/blob/main/docs/installing.md).
+          MD
+          prerelease=""; [[ "$VERSION" == *-* ]] && prerelease="--prerelease"
+          gh release create "$GITHUB_REF_NAME" out/* --title "Screenwriter $VERSION" --notes-file build-notes.md $prerelease

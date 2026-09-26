@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Screenwriter
+GenericName=Writing App
+Comment=Screenplays, books, notes and ideas
+Exec=Screenwriter %f
+Icon=screenwriter
+Terminal=false
+Categories=Office;WordProcessor;
+Keywords=screenplay;fountain;novel;writing;script;
