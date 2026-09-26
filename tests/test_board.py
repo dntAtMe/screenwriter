@@ -1,4 +1,5 @@
 import pytest
+from conftest import dispose
 from PySide6.QtCore import Qt
 from PySide6.QtTest import QTest
 
@@ -42,7 +43,8 @@ def board(qapp):
     ed.resize(800, 600)
     ed.show()
     ed.set_text("")
-    return ed
+    yield ed
+    dispose(ed)
 
 
 def type_into(card: CardItem, text: str):

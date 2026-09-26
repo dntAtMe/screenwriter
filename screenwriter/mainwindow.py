@@ -760,4 +760,10 @@ class MainWindow(QMainWindow):
         self.settings.setValue("geometry", self.saveGeometry())
         self.settings.setValue("splitter", self.splitter.saveState())
         self.close_project()
+        # While Qt tears the window down it still emits signals (tab changes,
+        # selection changes); don't let them reach half-destroyed Python objects.
+        for timer in (self.save_timer, self.outline_timer, self.bible_timer):
+            timer.stop()
+        for widget in (self.tabs, self.binder, self.outline, self.search, self.cast, self.side):
+            widget.blockSignals(True)
         super().closeEvent(event)

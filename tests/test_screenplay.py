@@ -1,4 +1,5 @@
 import pytest
+from conftest import dispose
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QTextCursor
 from PySide6.QtTest import QTest
@@ -12,7 +13,8 @@ def editor(qapp):
     ed.show()
     ed.set_text("EXT. SEA - DAY\n\n")
     ed.moveCursor(QTextCursor.MoveOperation.End)
-    return ed
+    yield ed
+    dispose(ed)
 
 
 def keys(ed, *steps):

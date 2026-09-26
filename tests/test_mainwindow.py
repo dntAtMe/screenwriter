@@ -2,6 +2,7 @@ import shutil
 from pathlib import Path
 
 import pytest
+from conftest import dispose
 from PySide6.QtCore import QSettings
 
 from screenwriter.mainwindow import MainWindow
@@ -10,13 +11,12 @@ SAMPLE = Path(__file__).parent.parent / "examples" / "The Lighthouse"
 
 
 @pytest.fixture
-def window(qapp, tmp_path):
+def window(qapp, sample_project):
     QSettings().clear()
-    shutil.copytree(SAMPLE, tmp_path / "sample")
     w = MainWindow()
-    w.open_project(tmp_path / "sample")
+    w.open_project(sample_project)
     yield w
-    w.close()
+    dispose(w)
 
 
 def test_outline_follows_current_tab(window):
