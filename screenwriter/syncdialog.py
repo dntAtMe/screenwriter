@@ -16,6 +16,8 @@ from PySide6.QtWidgets import (
 from .sync import cloud_folders, inside, package_name
 
 SUBFOLDER = "Screenwriter"
+GDRIVE = "gdrive:"
+SIGN_OUT = "sign-out"
 
 
 def short_path(path: Path, limit: int = 48) -> str:
@@ -32,7 +34,8 @@ def short_path(path: Path, limit: int = 48) -> str:
 class SyncDialog(QDialog):
     """Returns (via .chosen) the package path to sync with, "" to stop syncing, or None."""
 
-    def __init__(self, project_name: str, project_path: Path, current: Path | None, status: str, parent=None):
+    def __init__(self, project_name: str, project_path: Path, current: str | None, status: str,
+                 google: str = "unavailable", google_email: str = "", parent=None):
         super().__init__(parent)
         self.setWindowTitle("Sync & Backup")
         self.setMinimumWidth(560)
@@ -53,7 +56,8 @@ class SyncDialog(QDialog):
         layout.addWidget(intro)
 
         if current:
-            now = QLabel(f"<b>Syncing with</b><br>{short_path(current, 70)}<br><span style='color:gray'>{status}</span>")
+            shown = short_path(Path(current), 70) if not current.startswith("Google Drive") else current
+            now = QLabel(f"<b>Syncing with</b><br>{shown}<br><span style='color:gray'>{status}</span>")
             now.setToolTip(str(current))
             now.setWordWrap(True)
             layout.addWidget(now)
@@ -71,6 +75,15 @@ class SyncDialog(QDialog):
                 break
 
         layout.addWidget(QLabel("<b>Sync through</b>" if not current else "<b>Switch to</b>"))
+        if google != "unavailable":
+            label = "Google Drive — signed in as " + google_email if google == "signed_in" and google_email else \
+                "Google Drive — signed in" if google == "signed_in" else "Google Drive — Sign in with Google…"
+            drive = QPushButton(label)
+            drive.setToolTip("Keeps the project in My Drive/Screenwriter. No Google Drive app needed; "
+                             "Screenwriter can only see the files it creates.")
+            drive.clicked.connect(lambda: self._finish(GDRIVE))
+            layout.addWidget(drive)
+            layout.addWidget(QLabel("<span style='color:gray'>…or a folder that your cloud app keeps in sync:</span>"))
         for label, folder in folders:
             target = folder / SUBFOLDER / package_name(project_name)
             button = QPushButton(f"{label}   ({short_path(folder / SUBFOLDER)})")
@@ -87,6 +100,10 @@ class SyncDialog(QDialog):
         layout.addWidget(other)
 
         bottom = QHBoxLayout()
+        if google == "signed_in":
+            sign_out = QPushButton("Sign Out of Google")
+            sign_out.clicked.connect(lambda: self._finish(SIGN_OUT))
+            bottom.addWidget(sign_out)
         if current:
             stop = QPushButton("Stop Syncing")
             stop.setToolTip("The project stays on this computer and the file in the cloud folder is left as it is.")

@@ -311,7 +311,9 @@ def test_two_windows_sync_through_a_cloud_folder(window, tmp_path, monkeypatch):
     desktop = window
     package = tmp_path / "Google Drive" / "Screenwriter" / package_name(desktop.project.name)
     package.parent.mkdir(parents=True)
-    desktop.sync_package = package
+    from screenwriter.synctargets import FolderTarget
+
+    desktop._set_target(FolderTarget(package))
     assert desktop.sync_now().status == "uploaded"
 
     # the "laptop": another window opening the cloud file into its own folder
@@ -319,7 +321,7 @@ def test_two_windows_sync_through_a_cloud_folder(window, tmp_path, monkeypatch):
     laptop = MainWindow()
     laptop.open_project_file(str(package), str(tmp_path / "laptop"), keep_synced=True)
     laptop.history.machine = "Laptop"
-    assert laptop.project.path != desktop.project.path and laptop.sync_package == package
+    assert laptop.project.path != desktop.project.path and laptop.sync_target.package == package
 
     # a one-way change reaches an open editor on the other computer
     desktop.open_document("ch01")
@@ -358,6 +360,6 @@ def test_share_a_copy_and_open_it(window, tmp_path, monkeypatch):
     window.settings.remove(f"sync_local/{window.project.id}")
     other = MainWindow()
     other.open_project_file(str(target), str(tmp_path / "friend"), keep_synced=False)
-    assert other.project.name == window.project.name and other.sync_package is None
+    assert other.project.name == window.project.name and other.sync_target is None
     assert other.history.log()  # history came along
     dispose(other)

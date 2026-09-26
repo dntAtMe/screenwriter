@@ -1,10 +1,10 @@
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import QSettings, Qt, QTimer
-from PySide6.QtCore import QUrl
+from PySide6.QtCore import QSettings, QStandardPaths, Qt, QTimer, QUrl
 from PySide6.QtGui import QAction, QDesktopServices, QKeySequence
 from PySide6.QtWidgets import (
+    QApplication,
     QFileDialog,
     QHBoxLayout,
     QInputDialog,
@@ -30,7 +30,10 @@ from .snapshotdialog import SnapshotsDialog
 from .historydialog import HistoryDialog
 from .projecthistory import ProjectHistory
 from . import sync as cloud
-from .syncdialog import SyncDialog
+from .google_drive import DriveClient, DriveError, GoogleAccount, load_client_config
+from .googlesignin import sign_in_with_google
+from .syncdialog import SIGN_OUT, SyncDialog
+from .synctargets import GDRIVE_PREFIX, DriveTarget, FolderTarget, TargetError, target_from_key
 from . import board
 from .editors.board import BoardEditor
 from .editors.bible import BibleEditor
@@ -167,8 +170,9 @@ class MainWindow(QMainWindow):
         self.history_timer.timeout.connect(self._periodic_save_point)
 
         # Cloud sync: the package file this project syncs with (per computer, in settings).
-        self.sync_package: Path | None = None
-        self._package_mtime: float | None = None
+        self.sync_target = None  # FolderTarget | DriveTarget
+        self.google_config = load_client_config()
+        self.google_account = GoogleAccount.restore(self.google_config) if self.google_config else None
         self.sync_timer = QTimer(self, interval=60 * 1000)
         self.sync_timer.timeout.connect(self._check_cloud)
 
@@ -201,6 +205,7 @@ class MainWindow(QMainWindow):
         self._action(file, "New Project…", self.new_project, "Ctrl+Shift+N")
         self._action(file, "Open Project…", self.open_project_dialog, "Ctrl+O")
         self._action(file, "Open Project File…", self.open_project_file)
+        self._action(file, "Open from Google Drive…", self.open_from_google_drive)
         file.addSeparator()
         self.project_actions = [
             self._action(file, "Save", self.save_all, QKeySequence.StandardKey.Save),
@@ -323,14 +328,14 @@ class MainWindow(QMainWindow):
         self.history = ProjectHistory(project.path)
         self.history.save_point()  # whatever changed outside the app since last time
         self.history_timer.start()
-        package = self.settings.value(f"sync/{project.id}")
-        self.sync_package = Path(package) if package else None
+        key = self.settings.value(f"sync/{project.id}")
+        self.sync_target = self._make_target(key) if key else None
         self.stack.setCurrentWidget(self.splitter)
         self._set_project_actions_enabled(True)
         self.setWindowTitle(f"{project.name} — {APP_NAME}")
         self._remember(project.path)
         self._refresh_bible()
-        if self.sync_package:
+        if self.sync_target:
             self._start_sync()
         for node_id in self.settings.value(f"open_tabs/{project.path}", []) or []:
             if project.find(node_id):
@@ -342,10 +347,13 @@ class MainWindow(QMainWindow):
         self.save_point()
         self.history_timer.stop()
         self.sync_timer.stop()
-        if self.sync_package:
+        if self.sync_target:
             self.sync_now(quiet=True, reload=False)
-            cloud.remove_lock(self.sync_package, self.history.machine)
-        self.sync_package = None
+            try:
+                self.sync_target.unlock(self.history.machine)
+            except (DriveError, TargetError, OSError):
+                pass
+        self.sync_target = None
         self.sync_label.clear()
         self.history.pack()
         self.history.close()
@@ -543,71 +551,91 @@ class MainWindow(QMainWindow):
     # --- sync & sharing ----------------------------------------------------------------
 
     def _periodic_save_point(self) -> None:
-        if self.save_point() is not None and self.sync_package:
+        if self.save_point() is not None and self.sync_target:
             self.sync_now(quiet=True)
 
-    def _cloud_available(self) -> bool:
-        return self.sync_package is not None and self.sync_package.parent.is_dir()
+    def _drive_client(self):
+        return DriveClient(self.google_account) if self.google_account else None
+
+    def _drive_cache(self) -> Path:
+        return Path(QStandardPaths.writableLocation(QStandardPaths.StandardLocation.AppDataLocation)) / "google-drive"
+
+    def _make_target(self, key: str):
+        return target_from_key(key, self.project.id, self._drive_client(), self._drive_cache())
+
+    def _set_target(self, target) -> None:
+        self.sync_target = target
+        self.settings.setValue(f"sync/{self.project.id}", target.key)
+        self.settings.setValue(f"sync_local/{self.project.id}", str(self.project.path))
 
     def _start_sync(self) -> None:
         """On opening a synced project: say if it's open elsewhere, then bring it up to date."""
-        if not self._cloud_available():
-            self.sync_label.setText("☁ Sync folder not available")
-            self.sync_label.setToolTip(f"{self.sync_package.parent} can't be reached. Is the cloud app running?")
-            self.sync_timer.start()
+        self.sync_timer.start()
+        if not self.sync_target.available():
+            self.sync_label.setText("☁ Not syncing")
+            self.sync_label.setToolTip(self.sync_target.unavailable_reason())
             return
-        if other := cloud.open_elsewhere(self.sync_package, self.history.machine):
+        result = self.sync_now(quiet=True)
+        other = self.sync_target.other_machine(self.history.machine) if result is not None else None
+        if other:
             QMessageBox.information(
                 self, "Open on another computer",
                 f"“{self.project.name}” is open on {other} right now.\n\n"
                 "You can keep writing here — changes from both computers are merged when they sync — "
                 "but it's simplest to close it there first.",
             )
-        self.sync_now(quiet=True)
-        self.sync_timer.start()
 
     def _check_cloud(self) -> None:
-        """Every minute: keep the presence file fresh and pull if the cloud copy changed."""
-        if not self.project or not self.sync_package:
+        """Every minute: keep the presence marker fresh and pull if the cloud copy changed."""
+        if not self.project or not self.sync_target or not self.sync_target.available():
             return
-        if not self._cloud_available():
-            self.sync_label.setText("☁ Sync folder not available")
-            return
-        cloud.write_lock(self.sync_package, self.history.machine, self.project.id)
         try:
-            mtime = self.sync_package.stat().st_mtime
-        except OSError:
-            mtime = None
-        if mtime != self._package_mtime:
+            changed = self.sync_target.changed()
+            self.sync_target.lock(self.history.machine, self.project.id)
+        except (DriveError, TargetError, OSError) as e:
+            self._sync_failed(e, quiet=True)
+            return
+        if changed:
             self.sync_now(quiet=True)
-        other = cloud.open_elsewhere(self.sync_package, self.history.machine)
+        other = self.sync_target.other_machine(self.history.machine)
         if other and "also open" not in self.sync_label.text():
             self.sync_label.setText(self.sync_label.text() + f" · also open on {other}")
 
+    def _sync_failed(self, error: Exception, quiet: bool) -> None:
+        self.sync_label.setText("☁ Sync problem" if not isinstance(error, DriveError) else "☁ Can't reach Google Drive")
+        self.sync_label.setToolTip(str(error))
+        if not quiet:
+            QMessageBox.warning(self, "Sync", str(error))
+
     def sync_now(self, quiet: bool = False, reload: bool = True):
         """Sync with the cloud copy; returns the SyncResult (or None)."""
-        if not self.project or not self.sync_package:
+        if not self.project or not self.sync_target:
             return None
-        if not self._cloud_available():
-            self.sync_label.setText("☁ Sync folder not available")
+        target = self.sync_target
+        if not target.available():
+            self.sync_label.setText("☁ Not syncing")
+            self.sync_label.setToolTip(target.unavailable_reason())
             if not quiet:
-                QMessageBox.warning(self, "Sync", f"Can't reach {self.sync_package.parent}.\nIs Google Drive (or your cloud app) running?")
+                QMessageBox.warning(self, "Sync", target.unavailable_reason())
             return None
         self.save_point()
+        QApplication.setOverrideCursor(Qt.CursorShape.BusyCursor)
         try:
-            result = cloud.sync(self.history, self.project.id, self.project.name, self.sync_package)
-        except (cloud.SyncError, OSError) as e:
-            self.sync_label.setText("☁ Sync problem")
-            self.sync_label.setToolTip(str(e))
-            if not quiet:
-                QMessageBox.warning(self, "Sync", str(e))
+            package = target.prepare(self.project)
+            result = cloud.sync(self.history, self.project.id, self.project.name, package)
+            target.finish(result, self.project)
+            target.lock(self.history.machine, self.project.id)
+        except (cloud.SyncError, DriveError, TargetError, OSError) as e:
+            self._sync_failed(e, quiet)
             return None
-        cloud.write_lock(self.sync_package, self.history.machine, self.project.id)
-        self._package_mtime = self.sync_package.stat().st_mtime if self.sync_package.exists() else None
+        finally:
+            QApplication.restoreOverrideCursor()
+        if self.settings.value(f"sync/{self.project.id}") != target.key:
+            self.settings.setValue(f"sync/{self.project.id}", target.key)  # Drive file id known now
         if reload and result.changed:
             self._reload_after_sync(result.changed)
         self.sync_label.setText(f"☁ Synced {datetime.now():%H:%M}")
-        self.sync_label.setToolTip(str(self.sync_package))
+        self.sync_label.setToolTip(target.describe())
         if result.status in ("downloaded", "merged"):
             self.statusBar().showMessage(f"Brought in changes from {result.machine}", 5000)
         if result.conflicts:
@@ -641,44 +669,144 @@ class MainWindow(QMainWindow):
         self._refresh_bible()
         self._refresh_outline()
 
+    def _stop_syncing(self) -> None:
+        if self.sync_target:
+            try:
+                self.sync_target.unlock(self.history.machine)
+            except (DriveError, TargetError, OSError):
+                pass
+        self.settings.remove(f"sync/{self.project.id}")
+        self.sync_target = None
+        self.sync_timer.stop()
+        self.sync_label.clear()
+
     def show_sync_settings(self) -> None:
         if self.project is None:
             return
-        dialog = SyncDialog(self.project.name, self.project.path, self.sync_package, self.sync_label.text(), self)
+        dialog = SyncDialog(
+            self.project.name, self.project.path,
+            self.sync_target.describe() if self.sync_target else None, self.sync_label.text(),
+            google=("unavailable" if not self.google_config else "signed_in" if self.google_account else "signed_out"),
+            google_email=self.google_account.email if self.google_account else "",
+            parent=self,
+        )
         if not dialog.exec() or dialog.chosen is None:
             return
         if dialog.chosen == "":
-            if self.sync_package:
-                cloud.remove_lock(self.sync_package, self.history.machine)
-            self.settings.remove(f"sync/{self.project.id}")
-            self.sync_package = None
-            self.sync_timer.stop()
-            self.sync_label.clear()
+            self._stop_syncing()
             return
-        package = Path(dialog.chosen)
-        if package.exists():
-            try:
-                manifest = cloud.read_manifest(package)
-            except cloud.SyncError as e:
-                QMessageBox.warning(self, "Sync", str(e))
+        if dialog.chosen == SIGN_OUT:
+            self.sign_out_google()
+            return
+        if dialog.chosen == GDRIVE_PREFIX:
+            if not self.ensure_google():
                 return
-            if manifest.get("project_id") != self.project.id:
-                QMessageBox.warning(
-                    self, "Sync",
-                    f"{package.name} in that folder belongs to a different project ({manifest.get('name')}).\n"
-                    "Rename this project or choose another folder.",
-                )
-                return
-        self.sync_package = package
-        self.settings.setValue(f"sync/{self.project.id}", str(package))
-        self.settings.setValue(f"sync_local/{self.project.id}", str(self.project.path))
+            target = DriveTarget(self._drive_client(), self.project.id, None, self._drive_cache())
+        else:
+            package = Path(dialog.chosen)
+            if package.exists():
+                try:
+                    manifest = cloud.read_manifest(package)
+                except cloud.SyncError as e:
+                    QMessageBox.warning(self, "Sync", str(e))
+                    return
+                if manifest.get("project_id") != self.project.id:
+                    QMessageBox.warning(
+                        self, "Sync",
+                        f"{package.name} in that folder belongs to a different project ({manifest.get('name')}).\n"
+                        "Rename this project or choose another folder.",
+                    )
+                    return
+            target = FolderTarget(package)
+        if self.sync_target:
+            self._stop_syncing()
+        self._set_target(target)
         if self.sync_now() is not None:
             self.sync_timer.start()
+            where = "Open from Google Drive…" if target.kind == "gdrive" else "Open Project File… and pick that file"
             QMessageBox.information(
                 self, "Sync & Backup",
-                f"“{self.project.name}” now syncs with\n{package}\n\n"
-                "On another computer, choose File → Open Project File… and pick that file.",
+                f"“{self.project.name}” now syncs with\n{target.describe()}\n\n"
+                f"On another computer, choose File → {where}.",
             )
+
+    # --- Google account --------------------------------------------------------------------
+
+    def ensure_google(self) -> bool:
+        """Signed in with Google? If not, run the sign-in now."""
+        if self.google_account:
+            return True
+        if not self.google_config:
+            QMessageBox.information(self, "Google Drive", "Google sign-in isn't set up in this build of Screenwriter.")
+            return False
+        account = sign_in_with_google(self.google_config, self)
+        if account is None:
+            return False
+        if not account.remember():
+            self.statusBar().showMessage("Signed in — but this computer has no secure store, so you'll sign in again next time", 8000)
+        self.google_account = account
+        if self.sync_target and self.sync_target.kind == "gdrive":
+            self.sync_target.client = self._drive_client()
+        return True
+
+    def sign_out_google(self) -> None:
+        if self.google_account:
+            self.google_account.sign_out()
+        self.google_account = None
+        if self.sync_target and self.sync_target.kind == "gdrive":
+            self.sync_target.client = None
+            self.sync_label.setText("☁ Not syncing")
+            self.sync_label.setToolTip(self.sync_target.unavailable_reason())
+        self.statusBar().showMessage("Signed out of Google", 4000)
+
+    def open_from_google_drive(self, file_id: str | None = None, parent_folder: str | None = None) -> None:
+        """Pick a project kept in Google Drive and set it up on this computer."""
+        if not self.ensure_google():
+            return
+        client = self._drive_client()
+        QApplication.setOverrideCursor(Qt.CursorShape.BusyCursor)
+        try:
+            projects = client.list_projects()
+        except DriveError as e:
+            QApplication.restoreOverrideCursor()
+            QMessageBox.warning(self, "Open from Google Drive", str(e))
+            return
+        QApplication.restoreOverrideCursor()
+        if file_id is None:
+            if not projects:
+                QMessageBox.information(self, "Open from Google Drive",
+                                        "No Screenwriter projects in your Google Drive yet.\n"
+                                        "Turn on sync for a project with File → Sync & Backup….")
+                return
+            labels = [f"{p.name.removesuffix(cloud.PACKAGE_EXT)}   ({p.modified[:10]})" for p in projects]
+            label, ok = QInputDialog.getItem(self, "Open from Google Drive", "Project:", labels, 0, False)
+            if not ok:
+                return
+            chosen = projects[labels.index(label)]
+        else:
+            chosen = next((p for p in projects if p.id == file_id), None)
+            if chosen is None:
+                return
+        known = self.settings.value(f"sync_local/{chosen.project_id}")
+        if known and Project.is_project(Path(known)):
+            self.open_project(Path(known))
+            return
+        if parent_folder is None:
+            parent_folder = QFileDialog.getExistingDirectory(
+                self, "Where should the project live on this computer?", str(Path.home() / "Documents"))
+            if not parent_folder:
+                return
+        cache = self._drive_cache() / f"{chosen.project_id}{cloud.PACKAGE_EXT}"
+        try:
+            client.download(chosen.id, cache)
+            path = cloud.open_package(cache, Path(parent_folder))
+        except (DriveError, cloud.SyncError, OSError) as e:
+            QMessageBox.warning(self, "Open from Google Drive", str(e))
+            return
+        project_id = Project.open(path).id
+        self.settings.setValue(f"sync/{project_id}", GDRIVE_PREFIX + chosen.id)
+        self.settings.setValue(f"sync_local/{project_id}", str(path))
+        self.open_project(path)
 
     def share_copy(self) -> None:
         """Write a .screenwriter copy (with history) to send to someone."""

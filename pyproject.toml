@@ -8,6 +8,7 @@ license-files = ["LICENSE"]
 requires-python = ">=3.13"
 dependencies = [
     "dulwich>=1.2.15",
+    "keyring>=25.7.0",
     "pyside6>=6.11.2",
     "python-docx>=1.2.0",
 ]
