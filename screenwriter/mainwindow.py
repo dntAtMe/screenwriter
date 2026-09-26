@@ -766,7 +766,7 @@ class MainWindow(QMainWindow):
             self,
             f"About {APP_NAME}",
             f"<h3>{APP_NAME} {__version__}</h3>"
-            "<p>Screenplays, books, notes and ideas.</p>"
+            "<p>Screenplays, books, notes and ideas.<br>Free and open source under the MIT License.</p>"
             f'<p><a href="{REPOSITORY}">{REPOSITORY}</a></p>'
             f"<p style='color:gray'>Built with Qt {qVersion()} and PySide6 {pyside_version} "
             "(LGPLv3, <a href='https://www.qt.io/licensing/open-source-lgpl-obligations'>qt.io</a>).</p>",

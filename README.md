@@ -5,6 +5,7 @@
 <p align="center">A writing app for screenplays, books, notes and ideas — for macOS, Windows and Linux.</p>
 
 <p align="center">
+  <a href="https://dntatme.github.io/screenwriter/"><b>Website</b></a> ·
   <a href="https://github.com/dntAtMe/screenwriter/releases/latest"><b>Download</b></a> ·
   <a href="docs/user-guide.md">User guide</a> ·
   <a href="docs/installing.md">Installing</a> ·
@@ -64,4 +65,7 @@ uv run python -m screenwriter
 
 See [Development](docs/development.md) for tests, packaging and how releases are made. Bug reports and ideas are welcome in [Issues](https://github.com/dntAtMe/screenwriter/issues).
 
-The app bundles Qt and PySide6, which are available under the LGPLv3.
+## License
+
+Screenwriter is free and open source under the [MIT License](LICENSE). The app bundles Qt and PySide6,
+which are available under the LGPLv3.

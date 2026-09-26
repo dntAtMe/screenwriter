@@ -34,6 +34,7 @@ The first release.
 - **Snapshots**: named and automatic daily versions of each document, word-level comparison, undoable restore.
 - Autosave, restored tabs, focus mode, zoom.
 - Packages for macOS (`.dmg`), Windows (installer and portable `.zip`) and Linux (`.AppImage`, `.tar.gz`).
+- Released under the MIT License.
 
 [Unreleased]: https://github.com/dntAtMe/screenwriter/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/dntAtMe/screenwriter/releases/tag/v0.1.0

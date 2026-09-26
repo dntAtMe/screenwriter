@@ -13,7 +13,10 @@ ICON = str(ROOT / "screenwriter" / "resources" / "icon.png")  # converted to .ic
 a = Analysis(
     [str(ROOT / "packaging" / "launcher.py")],
     pathex=[str(ROOT)],
-    datas=[(str(ROOT / "screenwriter" / "resources"), "screenwriter/resources")] + collect_data_files("docx"),
+    datas=[
+        (str(ROOT / "screenwriter" / "resources"), "screenwriter/resources"),
+        (str(ROOT / "LICENSE"), "."),
+    ] + collect_data_files("docx"),
     excludes=["tkinter", "PySide6.QtQml", "PySide6.QtQuick", "PySide6.QtNetwork", "PySide6.QtTest"],
     noarchive=False,
 )

@@ -19,6 +19,7 @@ UninstallDisplayIcon={app}\Screenwriter.exe
 OutputDir={#OutputDir}
 OutputBaseFilename=Screenwriter-{#AppVersion}-windows-x64-setup
 SetupIconFile={#IconFile}
+LicenseFile={#SourcePath}\..\..\LICENSE
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
