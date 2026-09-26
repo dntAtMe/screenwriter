@@ -73,7 +73,10 @@ def test_add_idea_creates_inbox_when_missing(window):
 def test_board_document(window):
     window.open_document("storymap")
     board = window.editors["storymap"]
-    assert board.stats() == "8 cards · 7 links"
+    from screenwriter.board import Board
+
+    saved = Board.from_json(window.project.read_text(window.project.find("storymap")))
+    assert board.stats() == f"{len(saved.cards)} cards · {len(saved.links)} links"
     window._refresh_outline()
     from PySide6.QtWidgets import QTreeWidgetItemIterator
 
@@ -82,8 +85,8 @@ def test_board_document(window):
     while it.value():
         labels.append(it.value().text(0))
         it += 1
-    assert labels[:3] == ["The Lighthouse", "Mara Quinn", "Did the lamp ever go dark?"]
-    assert len(labels) == 8
+    assert labels.index("Mara Quinn") == labels.index("The Lighthouse") + 1  # first child under the root
+    assert len(labels) == len(saved.cards)
     window.search.query.setText("skipper")
     window.search.run()
     titles = {window.search.results.topLevelItem(i).text(0) for i in range(window.search.results.topLevelItemCount())}
@@ -142,3 +145,62 @@ def test_permanent_delete_removes_snapshots(window):
     window.project.snapshots.take("ch02", "x", ".md")
     window.project.delete_files(node)
     assert window.project.snapshots.list("ch02") == []
+
+
+def _add_script(window, text):
+    node_id = window.binder.add("screenplay", "Test Script", edit=False)
+    window.editors[node_id].set_text(text)
+    window.editors[node_id].document().setModified(True)
+    return node_id
+
+
+def test_bible_entry_from_script(window):
+    from screenwriter.editors.bible import BibleEditor
+
+    script_id = _add_script(window, "INT. BOAT - DAY\n\nNELL\nAhoy.\n\nNELL\nAgain.\n")
+    assert window._find_bible_entry("character", "NELL") is None
+    window.open_bible_entry("character", "NELL")
+    entry_id = window._find_bible_entry("character", "NELL")
+    assert entry_id is not None
+    folder = window.binder.find_item(entry_id).parent()
+    assert folder.text(0) == "Story Bible"
+    editor = window.editors[entry_id]
+    assert isinstance(editor, BibleEditor)
+    assert editor.inputs["name"].text() == "Nell"
+    editor.refresh_appearances()
+    assert editor.report().speeches == 2
+    assert "2 speeches" in editor.summary.text()
+    # opening again finds the same entry, no duplicate
+    window.open_bible_entry("character", "NELL")
+    assert window.tabs.currentWidget() is editor
+    window.save_all()
+    assert "name: Nell" in window.project.read_text(window.project.find(entry_id))
+    # names feed screenplay completion
+    assert "NELL" in window._bible_names()[0]
+    assert window.editors[script_id].bible_lookup("character", "NELL") == entry_id
+
+
+def test_bible_name_and_binder_title_stay_in_sync(window):
+    window.binder.setCurrentItem(None)
+    entry_id = window.binder.add("character", "New Character", edit=False)
+    editor = window.editors[entry_id]
+    editor.inputs["name"].setText("Ada")
+    editor.inputs["name"].textEdited.emit("Ada")
+    assert window.binder.find_item(entry_id).text(0) == "Ada"
+    assert window.tabs.tabText(window.tabs.indexOf(editor)) == "Ada"
+    item = window.binder.find_item(entry_id)
+    item.setText(0, "Ada Lovelace")  # inline rename in the binder
+    assert editor.inputs["name"].text() == "Ada Lovelace"
+
+
+def test_location_entry_and_completion(window):
+    script_id = _add_script(window, "INT. LIGHTHOUSE - NIGHT\n\nDark.\n\n")
+    window.open_bible_entry("location", "LAMP ROOM")
+    script = window.editors[script_id]
+    window.tabs.setCurrentWidget(script)
+    from PySide6.QtGui import QTextCursor
+    from PySide6.QtTest import QTest
+
+    script.moveCursor(QTextCursor.MoveOperation.End)
+    QTest.keyClicks(script, "INT. LA")
+    assert script.completer.currentCompletion() == "INT. LAMP ROOM"

@@ -22,6 +22,7 @@ As you type:
 """
 
 import math
+from typing import Callable
 
 from PySide6.QtCore import QStringListModel, Qt, QTimer, Signal
 from PySide6.QtGui import (
@@ -55,6 +56,14 @@ INDENTS = {
 }
 ALIGN = {El.TRANSITION: Qt.AlignmentFlag.AlignRight, El.CENTERED: Qt.AlignmentFlag.AlignHCenter}
 FORCED_MARKERS = ".!@>"
+
+HEADING_PREFIX_RE = re.compile(r"^\.?(INT\.?/EXT|I/E|INT|EXT|EST)\.?\s+", re.IGNORECASE)
+
+
+def heading_location(heading: str) -> str:
+    """'INT. LAMP ROOM - NIGHT' -> 'LAMP ROOM'."""
+    return HEADING_PREFIX_RE.sub("", heading.strip().lstrip(".")).split(" - ")[0].strip().upper()
+
 
 # Elements that can be picked explicitly (Format menu / Ctrl+1…6)
 SETTABLE = [El.SCENE, El.ACTION, El.CHARACTER, El.PARENTHETICAL, El.DIALOGUE, El.TRANSITION]
@@ -121,6 +130,11 @@ class FountainHighlighter(QSyntaxHighlighter):
 class ScreenplayEditor(TextDocumentAPI, QTextEdit):
     statsChanged = Signal()
     elementChanged = Signal(str)
+    bibleRequested = Signal(str, str)  # "character" | "location", NAME
+
+    # Set by the main window: story bible names for completion, and entry lookup.
+    bible_names: Callable[[], tuple[list[str], list[str]]] = staticmethod(lambda: ([], []))
+    bible_lookup: Callable[[str, str], str | None] = staticmethod(lambda kind, name: None)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -546,6 +560,30 @@ class ScreenplayEditor(TextDocumentAPI, QTextEdit):
             c.setPosition(block.position() - 1, QTextCursor.MoveMode.KeepAnchor)
             c.removeSelectedText()
 
+    # --- story bible ------------------------------------------------------------------
+
+    def contextMenuEvent(self, e):
+        menu = self.createStandardContextMenu()
+        # the standard Undo/Redo drive Qt's disabled undo stack; use ours
+        for action in menu.actions():
+            if action.text().replace("&", "").startswith(("Undo", "Redo")):
+                menu.removeAction(action)
+        block = self.cursorForPosition(e.pos()).block()
+        el = self._element(block)
+        target = None
+        if el == El.CHARACTER:
+            target = ("character", fountain.character_name(block.text()).upper())
+        elif el == El.SCENE:
+            target = ("location", heading_location(block.text()))
+        if target and target[1]:
+            kind, name = target
+            verb = "Open" if self.bible_lookup(kind, name) else "Add"
+            menu.insertSeparator(menu.actions()[0])
+            action = menu.addAction(f"{verb} “{name}” in Story Bible")
+            menu.insertAction(menu.actions()[0], action)
+            action.triggered.connect(lambda: self.bibleRequested.emit(kind, name))
+        menu.exec(e.globalPos())
+
     # --- completion -------------------------------------------------------------
 
     def _completion_context(self) -> tuple[str, list[str], str] | None:
@@ -563,12 +601,16 @@ class ScreenplayEditor(TextDocumentAPI, QTextEdit):
                 ext = prefix.rsplit("(", 1)[1]
                 return "extension", fountain.CUE_EXTENSIONS, ext
             names = [n for n, _ in fountain.characters(lines).most_common()]
+            names += [n for n in self.bible_names()[0] if n not in names]
             return "character", names, prefix
         if el == El.SCENE:
             if " - " in text:
                 return "time", fountain.times_of_day(lines), text.rsplit(" - ", 1)[1]
             here = text.strip().upper()
             locs = [loc for loc, _ in fountain.locations(lines).most_common() if loc != here]
+            if m := HEADING_PREFIX_RE.match(text):
+                prefix = m.group(0).upper()
+                locs += [c for c in (prefix + name for name in self.bible_names()[1]) if c not in locs and c != here]
             return "location", locs, text
         return None
 

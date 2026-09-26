@@ -25,8 +25,13 @@ PROJECT_FILE = "project.json"
 DOCS_DIR = "docs"
 
 FOLDER, PROSE, SCREENPLAY, NOTE, BOARD, TRASH = "folder", "prose", "screenplay", "note", "board", "trash"
-DOCUMENT_KINDS = (PROSE, SCREENPLAY, NOTE, BOARD)
-EXTENSIONS = {PROSE: ".md", NOTE: ".md", SCREENPLAY: ".fountain", BOARD: ".board.json"}
+CHARACTER, LOCATION = "character", "location"  # story bible entries (see bible.py)
+BIBLE_KINDS = (CHARACTER, LOCATION)
+DOCUMENT_KINDS = (PROSE, SCREENPLAY, NOTE, BOARD, CHARACTER, LOCATION)
+EXTENSIONS = {
+    PROSE: ".md", NOTE: ".md", SCREENPLAY: ".fountain", BOARD: ".board.json",
+    CHARACTER: ".md", LOCATION: ".md",
+}
 
 
 @dataclass
@@ -111,7 +116,11 @@ class Project:
 
     def new_node(self, kind: str, title: str) -> Node:
         node = Node(id=uuid.uuid4().hex[:12], title=title, kind=kind)
-        if node.is_document:
+        if kind in BIBLE_KINDS:
+            from .bible import format_entry
+
+            self.write_text(node, format_entry({"name": title}, ""))
+        elif node.is_document:
             self.doc_path(node).touch()
         return node
 
@@ -147,6 +156,11 @@ class Project:
     def in_trash(self, node: Node) -> bool:
         trash = next(n for n in self.root if n.kind == TRASH)
         return any(n.id == node.id for n in walk(trash.children))
+
+    def documents(self, kinds=DOCUMENT_KINDS, include_trash: bool = False) -> list[Node]:
+        """Documents of the given kinds in binder order."""
+        trashed = set() if include_trash else {n.id for t in self.root if t.kind == TRASH for n in walk(t.children)}
+        return [n for n in walk(self.root) if n.kind in kinds and n.id not in trashed]
 
     def find(self, node_id: str) -> Node | None:
         return next((n for n in walk(self.root) if n.id == node_id), None)

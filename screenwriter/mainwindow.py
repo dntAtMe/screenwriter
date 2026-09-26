@@ -26,13 +26,15 @@ from .snapshotdialog import SnapshotsDialog
 from .snapshots import AUTO_NAME
 from . import board
 from .editors.board import BoardEditor
+from .editors.bible import BibleEditor
+from . import bible
 from .outline import OutlinePanel
 from .search import FindBar, SearchPanel
 from .editors.prose import ProseEditor
 from .editors.screenplay import ScreenplayEditor
 from .editors import screenplay
 from .fountain import EL_NAMES
-from .project import BOARD, DOCUMENT_KINDS, FOLDER, NOTE, PROSE, SCREENPLAY, TRASH, Project, walk
+from .project import BIBLE_KINDS, BOARD, CHARACTER, DOCUMENT_KINDS, LOCATION, FOLDER, NOTE, PROSE, SCREENPLAY, TRASH, Project, walk
 
 APP_NAME = "Screenwriter"
 MAX_RECENT = 8
@@ -194,6 +196,8 @@ class MainWindow(QMainWindow):
             (SCREENPLAY, "New Screenplay", "Ctrl+Alt+N"),
             (NOTE, "New Note", "Ctrl+Shift+J"),
             (BOARD, "New Board", "Ctrl+Alt+B"),
+            (CHARACTER, "New Character", "Ctrl+Alt+C"),
+            (LOCATION, "New Location", "Ctrl+Alt+L"),
             (FOLDER, "New Folder", "Ctrl+Shift+G"),
         ):
             self.project_actions.append(self._action(insert, label, lambda _=False, k=kind: self.binder.add(k), shortcut))
@@ -323,6 +327,13 @@ class MainWindow(QMainWindow):
             return
         if node.kind == SCREENPLAY:
             editor = ScreenplayEditor()
+            editor.bible_names = self._bible_names
+            editor.bible_lookup = self._find_bible_entry
+            editor.bibleRequested.connect(self.open_bible_entry)
+        elif node.kind in BIBLE_KINDS:
+            editor = BibleEditor(node.kind, self._scan_documents)
+            editor.nameChanged.connect(lambda name, i=node_id: self._rename_from_editor(i, name))
+            editor.openRequested.connect(self.open_at)
         elif node.kind == BOARD:
             editor = BoardEditor(self._node_title)
             editor.openRequested.connect(self.open_document)
@@ -422,6 +433,8 @@ class MainWindow(QMainWindow):
         self._update_stats(editor)
         self.element_label.setText("")
         self._refresh_outline()
+        if isinstance(editor, BibleEditor):
+            editor.refresh_appearances()
         if item := self.binder.find_item(editor.node_id):
             self.binder.blockSignals(True)
             self.binder.setCurrentItem(item)
@@ -430,6 +443,14 @@ class MainWindow(QMainWindow):
     def _on_renamed(self, node_id: str, title: str) -> None:
         if editor := self.editors.get(node_id):
             self.tabs.setTabText(self.tabs.indexOf(editor), title)
+            if isinstance(editor, BibleEditor):
+                editor.set_name(title)
+
+    def _rename_from_editor(self, node_id: str, title: str) -> None:
+        if title := title.strip():
+            self.binder.rename(node_id, title)
+            if editor := self.editors.get(node_id):
+                self.tabs.setTabText(self.tabs.indexOf(editor), title)
 
     def _on_deleted(self, node_ids: list[str]) -> None:
         for node_id in node_ids:
@@ -509,7 +530,50 @@ class MainWindow(QMainWindow):
 
     def _current_text_editor(self):
         editor = self.tabs.currentWidget()
+        if isinstance(editor, BibleEditor):
+            return editor.notes
         return None if isinstance(editor, BoardEditor) else editor
+
+    # --- story bible ----------------------------------------------------------------
+
+    def _scan_documents(self) -> list[tuple[str, str, str, str]]:
+        """Scripts and prose to look for bible entries in: (id, title, kind, text)."""
+        if self.project is None:
+            return []
+        self.project.root = self.binder.to_nodes()
+        return [
+            (n.id, n.title, "screenplay" if n.kind == SCREENPLAY else "prose", self._text_of(n))
+            for n in self.project.documents((SCREENPLAY, PROSE))
+        ]
+
+    def _bible_entries(self, kinds=BIBLE_KINDS):
+        if self.project is None:
+            return []
+        self.project.root = self.binder.to_nodes()
+        return [(n, self._text_of(n)) for n in self.project.documents(kinds)]
+
+    def _bible_names(self) -> tuple[list[str], list[str]]:
+        return bible.known_names([(n.kind, text) for n, text in self._bible_entries()])
+
+    def _find_bible_entry(self, kind: str, name: str) -> str | None:
+        for node, text in self._bible_entries((kind,)):
+            fields, _ = bible.parse_entry(text)
+            if name.upper() in bible.script_names(fields, kind):
+                return node.id
+        return None
+
+    def open_bible_entry(self, kind: str, name: str) -> None:
+        """Open the entry for a name from a script, creating it in "Story Bible" if needed."""
+        if node_id := self._find_bible_entry(kind, name):
+            self.open_document(node_id)
+            return
+        title = name.title()
+        node_id = self.binder.add(kind, title, parent=self.binder.folder("Story Bible"), edit=False)
+        editor = self.editors.get(node_id)
+        if isinstance(editor, BibleEditor) and title.upper() != name:
+            editor.inputs["script names"].setText(name)
+            editor.textChanged.emit()
+        self.statusBar().showMessage(f"Added “{title}” to the Story Bible", 3000)
 
     def _node_title(self, node_id: str) -> str:
         item = self.binder.find_item(node_id)

@@ -36,6 +36,10 @@ Tests: `uv run pytest`
   - Cards come in six colours. Pan with the trackpad, `Space`+drag or middle-drag; zoom with pinch or `Ctrl`+wheel.
   - Drag chapters, scenes or notes from the binder onto a board to get cards linked to them; double-click one to open it.
   - The outline shows the map as a tree, and search covers card text.
+- **Story Bible**: Character (`Ctrl+Alt+C`) and Location (`Ctrl+Alt+L`) entries, each a form (name, name in script, role, age, description) plus free notes.
+  - An "Appears in" panel lists where the entry shows up: scenes where a character speaks (with speech and word counts), mentions in scripts and chapters, and scenes set at a location. Click to jump.
+  - Right-click a character name or scene heading in a script to open its entry, or to add one to a "Story Bible" folder.
+  - Bible names are suggested while you type cues and scene headings.
 - **Outline** (`Ctrl+Shift+O`): numbered scenes under their sections for scripts, headings for prose. Click to jump; it follows the cursor.
 - **Search** (`Ctrl+Shift+F`): matches across the whole project, grouped by document. **Find** (`Ctrl+F`, `Ctrl+G`) searches the current document.
 - **Idea capture** (`Ctrl+Shift+I`): jot an idea from anywhere; it lands, timestamped, in the project's Idea Inbox note.
@@ -56,7 +60,7 @@ A project is a plain folder, so it can be read, diffed and versioned without the
 ```
 My Story/
   project.json          binder tree + metadata
-  docs/<id>.md          prose and notes
+  docs/<id>.md          prose, notes, and story bible entries (front-matter header + notes)
   docs/<id>.fountain    screenplays
   docs/<id>.board.json  boards (cards + links)
   snapshots/<id>/       earlier versions of each document

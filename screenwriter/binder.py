@@ -5,13 +5,16 @@ from PySide6.QtGui import QAction, QColor, QFont, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import QAbstractItemView, QMenu, QMessageBox, QStyle, QTreeWidget, QTreeWidgetItem
 
 from .editors.board import NODE_MIME
-from .project import BOARD, DOCUMENT_KINDS, FOLDER, NOTE, PROSE, SCREENPLAY, TRASH, Node, Project, walk
+from .project import BOARD, CHARACTER, DOCUMENT_KINDS, LOCATION, FOLDER, NOTE, PROSE, SCREENPLAY, TRASH, Node, Project, walk
 
 ID_ROLE = Qt.ItemDataRole.UserRole
 KIND_ROLE = Qt.ItemDataRole.UserRole + 1
 
-KIND_LABELS = {PROSE: "Prose Document", SCREENPLAY: "Screenplay", NOTE: "Note", BOARD: "Board", FOLDER: "Folder"}
-DEFAULT_TITLES = {PROSE: "Untitled Chapter", SCREENPLAY: "Untitled Screenplay", NOTE: "Untitled Note", BOARD: "Untitled Board", FOLDER: "New Folder"}
+KIND_LABELS = {
+    PROSE: "Prose Document", SCREENPLAY: "Screenplay", NOTE: "Note", BOARD: "Board",
+    CHARACTER: "Character", LOCATION: "Location", FOLDER: "Folder",
+}
+DEFAULT_TITLES = {PROSE: "Untitled Chapter", SCREENPLAY: "Untitled Screenplay", NOTE: "Untitled Note", BOARD: "Untitled Board", CHARACTER: "New Character", LOCATION: "New Location", FOLDER: "New Folder"}
 
 
 def _letter_icon(letter: str, color: str) -> QIcon:
@@ -58,6 +61,8 @@ class Binder(QTreeWidget):
             SCREENPLAY: _letter_icon("S", "#b5563c"),
             NOTE: _letter_icon("N", "#6b8f4e"),
             BOARD: _letter_icon("B", "#8a63b8"),
+            CHARACTER: _letter_icon("C", "#c07a2c"),
+            LOCATION: _letter_icon("L", "#2f8a86"),
         }
 
         self.itemClicked.connect(self._on_open)
@@ -136,27 +141,53 @@ class Binder(QTreeWidget):
 
     # --- actions --------------------------------------------------------------
 
-    def add(self, kind: str) -> str | None:
+    def add(self, kind: str, title: str | None = None, parent: QTreeWidgetItem | None = None,
+            edit: bool = True) -> str | None:
+        """Add a node after the current item (or into it, for a folder), or into `parent`."""
         if self.project is None:
             return None
-        node = self.project.new_node(kind, DEFAULT_TITLES[kind])
+        node = self.project.new_node(kind, title or DEFAULT_TITLES[kind])
         item = self._make_item(node)
         current = self.currentItem()
-        if current is None or self._in_trash(current):
+        if parent is not None:
+            parent.addChild(item)
+            parent.setExpanded(True)
+        elif current is None or self._in_trash(current):
             root = self.invisibleRootItem()
             root.insertChild(root.indexOfChild(self._trash_item()), item)
         elif current.data(0, KIND_ROLE) == FOLDER:
             current.addChild(item)
             current.setExpanded(True)
         else:
-            parent = current.parent() or self.invisibleRootItem()
-            parent.insertChild(parent.indexOfChild(current) + 1, item)
+            owner = current.parent() or self.invisibleRootItem()
+            owner.insertChild(owner.indexOfChild(current) + 1, item)
         self.setCurrentItem(item)
         self.structureChanged.emit()
         if kind in DOCUMENT_KINDS:
             self.openRequested.emit(node.id)
-        self.editItem(item)
+        if edit:
+            self.editItem(item)
         return node.id
+
+    def folder(self, title: str) -> QTreeWidgetItem:
+        """The top-level folder with this title, created (above the Trash) if missing."""
+        root = self.invisibleRootItem()
+        for i in range(root.childCount()):
+            item = root.child(i)
+            if item.data(0, KIND_ROLE) == FOLDER and item.text(0) == title:
+                return item
+        node = self.project.new_node(FOLDER, title)
+        item = self._make_item(node)
+        root.insertChild(root.indexOfChild(self._trash_item()), item)
+        return item
+
+    def rename(self, node_id: str, title: str) -> None:
+        """Rename without going through the inline editor (no renamed signal)."""
+        if (item := self.find_item(node_id)) and item.text(0) != title:
+            self.blockSignals(True)
+            item.setText(0, title)
+            self.blockSignals(False)
+            self.structureChanged.emit()
 
     def rename_current(self) -> None:
         item = self.currentItem()
@@ -234,7 +265,7 @@ class Binder(QTreeWidget):
         if item:
             self.setCurrentItem(item)
         menu = QMenu(self)
-        for kind in (PROSE, SCREENPLAY, NOTE, BOARD, FOLDER):
+        for kind in (PROSE, SCREENPLAY, NOTE, BOARD, CHARACTER, LOCATION, FOLDER):
             action = QAction(self.icons[kind], f"New {KIND_LABELS[kind]}", menu)
             action.triggered.connect(lambda _=False, k=kind: self.add(k))
             menu.addAction(action)
