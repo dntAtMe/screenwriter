@@ -79,7 +79,18 @@ The builds are attached to the run as artifacts.
 If a release build fails, fix it on `main`, then move the tag: `git tag -fa vx.y.z … && git push -f origin vx.y.z`
 (only before anyone has downloaded it — otherwise make a new patch release).
 
-### Not done yet
+## Website
+
+The project site at <https://dntatme.github.io/screenwriter/> is built from `site/` (landing page, styles,
+download script) plus the Markdown in `docs/` and `CHANGELOG.md`, by the **Website** workflow on every push to
+`main` that touches them. Its download buttons read the latest GitHub Release, so a new release shows up there
+without rebuilding the site. Preview locally:
+
+```bash
+uv run --group site python site/build.py && python3 -m http.server -d _site
+```
+
+## Not done yet
 
 - **Code signing / notarisation** (macOS Developer ID, Windows Authenticode) — until then users see the
   first-launch warnings described in [Installing](installing.md).
