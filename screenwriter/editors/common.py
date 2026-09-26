@@ -1,6 +1,6 @@
 import re
 
-from PySide6.QtGui import QFontDatabase, QPalette
+from PySide6.QtGui import QFontDatabase, QPalette, QTextCursor
 from PySide6.QtWidgets import QAbstractScrollArea
 
 WORD_RE = re.compile(r"[\w'’-]+")
@@ -27,3 +27,20 @@ def paint_margins_as_page(editor: QAbstractScrollArea) -> None:
     pal.setColor(QPalette.ColorRole.Window, pal.color(QPalette.ColorRole.Base))
     editor.setPalette(pal)
     editor.setAutoFillBackground(True)
+
+
+def goto(editor, pos: int, length: int = 0) -> None:
+    """Select `length` characters at plain-text offset `pos` and scroll them into view."""
+    size = editor.document().characterCount() - 1
+    cursor = editor.textCursor()
+    cursor.setPosition(min(pos + length, size))
+    cursor.setPosition(min(pos, size), QTextCursor.MoveMode.KeepAnchor)
+    editor.setTextCursor(cursor)
+    editor.ensureCursorVisible()
+    editor.setFocus()
+
+
+def goto_line(editor, line: int) -> None:
+    block = editor.document().findBlockByNumber(line)
+    if block.isValid():
+        goto(editor, block.position())

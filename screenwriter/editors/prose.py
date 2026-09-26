@@ -6,6 +6,7 @@ from PySide6.QtCore import Signal
 from PySide6.QtGui import QColor, QFont, QSyntaxHighlighter, QTextCharFormat
 from PySide6.QtWidgets import QFrame, QPlainTextEdit
 
+from ..fountain import OutlineItem
 from .common import center_column, first_available_font, paint_margins_as_page, word_count
 
 COLUMN_CHARS = 70
@@ -57,6 +58,17 @@ class MarkdownHighlighter(QSyntaxHighlighter):
                 self.setFormat(m.start(), m.end() - m.start(), self.formats[name])
 
 
+HEADING_RE = re.compile(r"^(#{1,6})\s+(.*)")
+
+
+def markdown_outline(text: str) -> list[OutlineItem]:
+    items = []
+    for i, line in enumerate(text.split("\n")):
+        if m := HEADING_RE.match(line):
+            items.append(OutlineItem(len(m.group(1)) - 1, m.group(2).strip() or "(heading)", i, "heading"))
+    return items
+
+
 class ProseEditor(QPlainTextEdit):
     statsChanged = Signal()
 
@@ -77,6 +89,9 @@ class ProseEditor(QPlainTextEdit):
 
     def text(self) -> str:
         return self.toPlainText()
+
+    def outline(self) -> list[OutlineItem]:
+        return markdown_outline(self.toPlainText())
 
     def is_modified(self) -> bool:
         return self.document().isModified()

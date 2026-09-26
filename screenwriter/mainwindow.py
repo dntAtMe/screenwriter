@@ -19,11 +19,15 @@ from PySide6.QtWidgets import (
 )
 
 from .binder import Binder
+from .capture import QuickCapture, append_idea, format_idea
+from .editors.common import goto, goto_line
+from .outline import OutlinePanel
+from .search import FindBar, SearchPanel
 from .editors.prose import ProseEditor
 from .editors.screenplay import ScreenplayEditor
 from .editors import screenplay
 from .fountain import EL_NAMES
-from .project import FOLDER, NOTE, PROSE, SCREENPLAY, Project
+from .project import DOCUMENT_KINDS, FOLDER, NOTE, PROSE, SCREENPLAY, TRASH, Project, walk
 
 APP_NAME = "Screenwriter"
 MAX_RECENT = 8
@@ -89,11 +93,32 @@ class MainWindow(QMainWindow):
         self.tabs.tabCloseRequested.connect(self.close_tab)
         self.tabs.currentChanged.connect(self._on_tab_changed)
 
+        self.find_bar = FindBar(self.tabs.currentWidget)
+        center = QWidget()
+        center_layout = QVBoxLayout(center)
+        center_layout.setContentsMargins(0, 0, 0, 0)
+        center_layout.setSpacing(0)
+        center_layout.addWidget(self.tabs)
+        center_layout.addWidget(self.find_bar)
+
+        # Right-hand side panel: document outline and project search.
+        self.outline = OutlinePanel()
+        self.outline.jumpRequested.connect(self._jump_to_line)
+        self.search = SearchPanel(self._searchable_documents)
+        self.search.openRequested.connect(self.open_at)
+        self.side = QTabWidget()
+        self.side.setDocumentMode(True)
+        self.side.addTab(self.outline, "Outline")
+        self.side.addTab(self.search, "Search")
+        self.outline_timer = QTimer(self, singleShot=True, interval=300)
+        self.outline_timer.timeout.connect(self._refresh_outline)
+
         self.splitter = QSplitter()
         self.splitter.addWidget(self.binder)
-        self.splitter.addWidget(self.tabs)
+        self.splitter.addWidget(center)
+        self.splitter.addWidget(self.side)
         self.splitter.setStretchFactor(1, 1)
-        self.splitter.setSizes([240, 960])
+        self.splitter.setSizes([240, 900, 280])
 
         self.welcome = Welcome(self)
         self.stack = QStackedWidget()
@@ -118,6 +143,8 @@ class MainWindow(QMainWindow):
         self.resize(1280, 820)
         if geometry := self.settings.value("geometry"):
             self.restoreGeometry(geometry)
+        if splitter := self.settings.value("splitter"):
+            self.splitter.restoreState(splitter)
 
     # --- menus ------------------------------------------------------------------
 
@@ -145,6 +172,13 @@ class MainWindow(QMainWindow):
             self._action(edit, "Undo", lambda: self._current_call("undo"), QKeySequence.StandardKey.Undo),
             self._action(edit, "Redo", lambda: self._current_call("redo"), QKeySequence.StandardKey.Redo),
         ]
+        edit.addSeparator()
+        self.project_actions += [
+            self._action(edit, "Find…", self.find_bar.open_bar, QKeySequence.StandardKey.Find),
+            self._action(edit, "Find Next", self.find_bar.find, QKeySequence.StandardKey.FindNext),
+            self._action(edit, "Find Previous", lambda: self.find_bar.find(backward=True), QKeySequence.StandardKey.FindPrevious),
+            self._action(edit, "Search Project…", self.show_search, "Ctrl+Shift+F"),
+        ]
 
         insert = bar.addMenu("&Insert")
         for kind, label, shortcut in (
@@ -154,6 +188,8 @@ class MainWindow(QMainWindow):
             (FOLDER, "New Folder", "Ctrl+Shift+G"),
         ):
             self.project_actions.append(self._action(insert, label, lambda _=False, k=kind: self.binder.add(k), shortcut))
+        insert.addSeparator()
+        self.project_actions.append(self._action(insert, "Capture Idea…", self.capture_idea, "Ctrl+Shift+I"))
 
         fmt = bar.addMenu("F&ormat")
         self.element_actions = []
@@ -164,7 +200,9 @@ class MainWindow(QMainWindow):
         view = bar.addMenu("&View")
         self.project_actions += [
             self._action(view, "Toggle Binder", self.toggle_binder, "Ctrl+\\"),
-            self._action(view, "Focus Mode", self.toggle_focus, "Ctrl+Shift+F"),
+            self._action(view, "Toggle Side Panel", self.toggle_side, "Ctrl+Alt+\\"),
+            self._action(view, "Outline", self.show_outline, "Ctrl+Shift+O"),
+            self._action(view, "Focus Mode", self.toggle_focus, "Ctrl+Shift+D"),
         ]
         self._action(view, "Full Screen", self.toggle_fullscreen, "Ctrl+Meta+F")
         view.addSeparator()
@@ -278,6 +316,8 @@ class MainWindow(QMainWindow):
         editor.set_text(self.project.read_text(node))
         editor.textChanged.connect(self.save_timer.start)
         editor.statsChanged.connect(lambda e=editor: self._update_stats(e))
+        editor.textChanged.connect(lambda e=editor: self._schedule_outline(e))
+        editor.cursorPositionChanged.connect(lambda e=editor: self._on_cursor_moved(e))
         if isinstance(editor, ScreenplayEditor):
             editor.elementChanged.connect(lambda name, e=editor: self._update_element(e, name))
         self.editors[node_id] = editor
@@ -319,6 +359,7 @@ class MainWindow(QMainWindow):
             return
         self._update_stats(editor)
         self.element_label.setText("")
+        self._refresh_outline()
         if item := self.binder.find_item(editor.node_id):
             self.binder.blockSignals(True)
             self.binder.setCurrentItem(item)
@@ -342,16 +383,100 @@ class MainWindow(QMainWindow):
         if editor is self.tabs.currentWidget():
             self.element_label.setText(name)
 
+    def open_at(self, node_id: str, pos: int, length: int) -> None:
+        self.open_document(node_id)
+        if editor := self.editors.get(node_id):
+            goto(editor, pos, length)
+
+    def _searchable_documents(self) -> list[tuple[str, str, str]]:
+        if self.project is None:
+            return []
+        self.project.root = self.binder.to_nodes()
+        trash = next(n for n in self.project.root if n.kind == TRASH)
+        trashed = {n.id for n in walk(trash.children)}
+        docs = []
+        for node in walk(self.project.root):
+            if node.kind in DOCUMENT_KINDS and node.id not in trashed:
+                editor = self.editors.get(node.id)
+                docs.append((node.id, node.title, editor.text() if editor else self.project.read_text(node)))
+        return docs
+
+    # --- outline ------------------------------------------------------------------
+
+    def _schedule_outline(self, editor) -> None:
+        if editor is self.tabs.currentWidget():
+            self.outline_timer.start()
+
+    def _refresh_outline(self) -> None:
+        editor = self.tabs.currentWidget()
+        self.outline.set_items(editor.outline() if editor else [])
+        if editor:
+            self.outline.highlight_line(editor.textCursor().blockNumber())
+
+    def _on_cursor_moved(self, editor) -> None:
+        if editor is self.tabs.currentWidget():
+            self.outline.highlight_line(editor.textCursor().blockNumber())
+
+    def _jump_to_line(self, line: int) -> None:
+        if editor := self.tabs.currentWidget():
+            goto_line(editor, line)
+
+    # --- ideas --------------------------------------------------------------------
+
+    def capture_idea(self) -> None:
+        if self.project is None:
+            return
+        self._save_structure()
+        inbox, created = self.project.ensure_inbox()
+        if created:
+            self.binder.load(self.project)
+        dialog = QuickCapture(inbox.title, self)
+        if dialog.exec() and dialog.text():
+            self.add_idea(dialog.text())
+
+    def add_idea(self, text: str) -> None:
+        self._save_structure()
+        inbox, created = self.project.ensure_inbox()
+        if created:
+            self.binder.load(self.project)
+        idea = format_idea(text)
+        if editor := self.editors.get(inbox.id):
+            cursor = editor.textCursor()
+            cursor.movePosition(cursor.MoveOperation.End)
+            cursor.insertText(append_idea(editor.text(), idea))
+            self.save_all()
+        else:
+            existing = self.project.read_text(inbox)
+            self.project.write_text(inbox, existing + append_idea(existing, idea))
+        self.statusBar().showMessage(f"Idea saved to “{inbox.title}”", 3000)
+
     # --- view -------------------------------------------------------------------
 
     def toggle_binder(self) -> None:
         self.binder.setVisible(not self.binder.isVisible())
 
+    def toggle_side(self) -> None:
+        self.side.setVisible(not self.side.isVisible())
+
+    def show_outline(self) -> None:
+        self.side.show()
+        self.side.setCurrentWidget(self.outline)
+
+    def show_search(self) -> None:
+        self.side.show()
+        self.side.setCurrentWidget(self.search)
+        editor = self.tabs.currentWidget()
+        selected = editor.textCursor().selectedText() if editor else ""
+        self.search.focus(selected if "\u2029" not in selected else "")
+
     def toggle_focus(self) -> None:
         focused = self.binder.isVisible()
         self.binder.setVisible(not focused)
+        self.side.setVisible(not focused)
         self.statusBar().setVisible(not focused)
         self.tabs.tabBar().setVisible(not focused)
+        if focused:
+            self.find_bar.hide()
 
     def toggle_fullscreen(self) -> None:
         self.showNormal() if self.isFullScreen() else self.showFullScreen()
@@ -365,5 +490,6 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event) -> None:
         self.settings.setValue("geometry", self.saveGeometry())
+        self.settings.setValue("splitter", self.splitter.saveState())
         self.close_project()
         super().closeEvent(event)

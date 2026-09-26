@@ -62,10 +62,11 @@ def _write_atomic(path: Path, text: str) -> None:
 
 
 class Project:
-    def __init__(self, path: Path, name: str, root: list[Node]):
+    def __init__(self, path: Path, name: str, root: list[Node], inbox_id: str | None = None):
         self.path = path
         self.name = name
         self.root = root
+        self.inbox_id = inbox_id
         self._ensure_trash()
 
     @classmethod
@@ -81,7 +82,7 @@ class Project:
         data = json.loads((path / PROJECT_FILE).read_text(encoding="utf-8"))
         (path / DOCS_DIR).mkdir(exist_ok=True)
         root = [Node.from_dict(d) for d in data.get("binder", [])]
-        return cls(path, data.get("name", path.name), root)
+        return cls(path, data.get("name", path.name), root, data.get("inbox"))
 
     @staticmethod
     def is_project(path: Path) -> bool:
@@ -93,6 +94,8 @@ class Project:
             "name": self.name,
             "binder": [n.to_dict() for n in self.root],
         }
+        if self.inbox_id:
+            data["inbox"] = self.inbox_id
         _write_atomic(self.path / PROJECT_FILE, json.dumps(data, indent=2, ensure_ascii=False) + "\n")
 
     def _ensure_trash(self) -> None:
@@ -121,6 +124,23 @@ class Project:
         for n in walk([node]):
             if n.is_document:
                 self.doc_path(n).unlink(missing_ok=True)
+
+    def ensure_inbox(self) -> tuple[Node, bool]:
+        """The note that quick-captured ideas go to; (node, created)."""
+        node = self.find(self.inbox_id) if self.inbox_id else None
+        if node is not None and not self.in_trash(node):
+            return node, False
+        node = self.new_node(NOTE, "Idea Inbox")
+        self.write_text(node, "# Idea Inbox\n\n")
+        trash_index = next(i for i, n in enumerate(self.root) if n.kind == TRASH)
+        self.root.insert(trash_index, node)
+        self.inbox_id = node.id
+        self.save()
+        return node, True
+
+    def in_trash(self, node: Node) -> bool:
+        trash = next(n for n in self.root if n.kind == TRASH)
+        return any(n.id == node.id for n in walk(trash.children))
 
     def find(self, node_id: str) -> Node | None:
         return next((n for n in walk(self.root) if n.id == node_id), None)

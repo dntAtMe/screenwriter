@@ -1,6 +1,7 @@
 {
   "format": 1,
   "name": "The Lighthouse",
+  "inbox": "ideas",
   "binder": [
     {
       "id": "manuscript",
