@@ -10,7 +10,8 @@ On macOS, `Ctrl` in every shortcut below means `⌘` (Command), and `Alt` means 
 - [Corkboard](#corkboard)
 - [Outline, Cast, search and find](#outline-cast-search-and-find)
 - [Capturing ideas](#capturing-ideas)
-- [Snapshots: version history](#snapshots-version-history)
+- [History and versions](#history-and-versions)
+- [Sync, backup and sharing](#sync-backup-and-sharing)
 - [Exporting](#exporting)
 - [Views and focus](#views-and-focus)
 - [Keyboard shortcuts](#keyboard-shortcuts)
@@ -192,16 +193,71 @@ The side panel on the right (**View → Toggle Side Panel**, `Ctrl+Alt+\`) has t
 Press `Ctrl+Shift+I` anywhere, type the idea, and press `Ctrl+Enter`. It's added with the date and time to the
 project's **Idea Inbox** note (created if the project doesn't have one yet).
 
-## Snapshots: version history
+## History and versions
 
-A snapshot is a saved copy of a document you can go back to.
+Screenwriter keeps the history of the **whole project** for you — every chapter, script, board and Bible
+entry, and the binder itself. There's nothing to set up and nothing to learn about version control.
 
-- **Take one** before a big rewrite: **File → Take Snapshot…** (`Ctrl+Alt+S`), optionally with a name.
-- **Automatic**: the first time you change a document each day, the previous version is kept as a snapshot.
-- **Browse** with **File → Snapshots…** (`Ctrl+Alt+H`): pick a version to see what's changed since
-  (removed words struck through in red, added words in green) or the version itself.
-- **Restore This Version** replaces the document. The current text is kept as a *Before restore* snapshot
-  first, and you can also undo the restore.
+- **Automatic save points** are made when you open a project, every few minutes while it changes, and when
+  you close it.
+- **Save Version…** (`Ctrl+Alt+S`) records a named one — “Before Act 2 rewrite”, “Sent to producer”.
+- **History…** (`Ctrl+Alt+H`) shows them all, newest first (named versions in bold). Show the whole project or
+  only the document you're in, and hide automatic save points if you only want the named ones.
+
+Pick a save point to see which documents it changed, then one of those documents:
+
+| Tab | Shows |
+|---|---|
+| **What changed here** | what that save point changed, word by word (removed in red, added in green) |
+| **Changes since, up to now** | everything that's changed in that document since then |
+| **This version** | the document as it was |
+
+**Restore This Document** puts one document back — including one you've since deleted, which returns to its
+old folder. **Restore Whole Project…** puts everything back the way it was. Either way the current state is
+saved as a version first (“Before restoring…”), so you can always change your mind; restoring an open document
+can also be undone with `Ctrl+Z`.
+
+History lives in a hidden `.history` folder inside the project. Snapshots made by earlier versions of the app
+are still under **File → Older Snapshots…**.
+
+## Sync, backup and sharing
+
+### Sync through a cloud folder
+
+To back a project up and work on it from more than one computer, keep it in sync through a cloud folder —
+**Google Drive** (with Google Drive for desktop), **Dropbox**, **iCloud Drive** or **OneDrive**:
+
+1. **File → Sync & Backup…** and pick your cloud folder (Screenwriter lists the ones it finds), or
+   **Choose Another Folder…** — a USB drive works too, as a backup.
+2. Screenwriter writes one file there, e.g. `Google Drive/Screenwriter/The Lighthouse.screenwriter`, holding the
+   project and its whole history.
+3. **On your other computer**, once the cloud folder has synced: **File → Open Project File…**, pick that file,
+   choose where the project should live on that computer, and answer **Yes** to keeping it in sync.
+
+From then on, both computers sync by themselves: when you open and close the project, every few minutes while
+you write, and whenever the file in the cloud folder changes. The status bar shows **☁ Synced 14:05** (or a
+problem, if the cloud folder can't be reached — usually because the cloud app isn't running).
+
+**If both computers changed things** between syncs, Screenwriter merges them:
+
+- documents changed on only one computer simply take that version;
+- binder changes — new documents, renames, moves, synopses, labels — are combined;
+- a document changed **on both** keeps your version, and the other computer's version appears right below it as
+  “Chapter 1 (from Laptop)”. You'll get a message listing them; copy what you need and delete the other;
+- a document edited on one computer and deleted on the other is kept.
+
+Nothing is ever overwritten, and every sync is in the project's history, so it can be undone from **History…**.
+If a project is open on another computer when you open it, Screenwriter tells you. It works, but closing it on
+the other computer first keeps things simplest.
+
+Keep the **project folder itself outside** the cloud folder (for example in Documents) — sync goes through the
+single `.screenwriter` file. To stop, **File → Sync & Backup… → Stop Syncing**; the project stays where it is.
+
+### Share a copy
+
+**File → Share a Copy…** saves the project, with its history, as one `.screenwriter` file you can email or send.
+The other person opens it with **File → Open Project File…** (and answers **No** to keeping it in sync). They get
+their own copy; nothing they do changes yours.
 
 ## Exporting
 
@@ -236,7 +292,7 @@ Select what to export in the binder and choose **File → Export…** (`Ctrl+E`)
 | New project / Open project | `Ctrl+Shift+N` / `Ctrl+O` |
 | Save now / Close tab | `Ctrl+S` / `Ctrl+W` |
 | Export | `Ctrl+E` |
-| Take snapshot / Browse snapshots | `Ctrl+Alt+S` / `Ctrl+Alt+H` |
+| Save version / History | `Ctrl+Alt+S` / `Ctrl+Alt+H` |
 | **New items** | |
 | Prose document / Screenplay / Note | `Ctrl+N` / `Ctrl+Alt+N` / `Ctrl+Shift+J` |
 | Board / Folder | `Ctrl+Alt+B` / `Ctrl+Shift+G` |
@@ -265,7 +321,7 @@ My Story/
   docs/<id>.md          prose, notes and Story Bible entries (Markdown)
   docs/<id>.fountain    screenplays (Fountain)
   docs/<id>.board.json  boards
-  snapshots/<id>/       earlier versions of each document
+  .history/             the project's history (save points)
 ```
 
 Files are named by a short id; the titles live in `project.json`. Every text file opens in any editor, and

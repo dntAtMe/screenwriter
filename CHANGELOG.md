@@ -6,6 +6,19 @@ All notable changes to Screenwriter are listed here. The format follows
 
 ## [Unreleased]
 
+### Added
+- **Project history**: automatic save points of the whole project (on open, every few minutes of changes, on
+  close) and named versions (**Save Version…**). **History…** shows what each save point changed, compares any
+  version with now, and restores one document — even a deleted one — or the whole project.
+- **Sync & Backup** through a cloud folder (Google Drive, Dropbox, iCloud Drive, OneDrive, or any folder): the
+  project and its history live there as one `.screenwriter` file, synced on open, on close, every few minutes
+  and when the file changes. Changes from two computers are merged; a document changed on both keeps both
+  versions. A notice when the project is open on another computer.
+- **Share a Copy…** and **Open Project File…** for `.screenwriter` files.
+
+### Changed
+- Per-document snapshots are replaced by project history; existing ones are under **File → Older Snapshots…**.
+
 ## [0.1.0] - 2026-09-26
 
 The first release.

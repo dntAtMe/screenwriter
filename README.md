@@ -22,7 +22,8 @@
 - **Mind maps and corkboards.** Brainstorm on a canvas of cards, or see a folder of chapters as index cards with synopses and drag them into order.
 - **Ideas, search, outline.** Capture an idea from anywhere, search the whole project, and jump through scenes or headings from the outline.
 - **Export.** Industry-format screenplay PDF, Final Draft (`.fdx`), manuscript PDF and Word (`.docx`), Markdown, and board images.
-- **Nothing gets lost.** Autosave, daily snapshots of every document, word-by-word comparison with earlier versions, and restore.
+- **Nothing gets lost.** Autosave, a full project history with named versions, word-by-word comparison with any earlier version, and restore — of one document or everything.
+- **Sync and share.** Keep a project in Google Drive, Dropbox, iCloud or OneDrive and work on it from several computers; changes are merged, and nothing is overwritten. Send someone a copy as a single file.
 - **Your files stay yours.** A project is an ordinary folder of Markdown and Fountain text files — readable without the app, easy to back up or keep in git.
 
 | | |
