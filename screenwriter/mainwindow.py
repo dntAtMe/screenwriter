@@ -2,7 +2,8 @@ from datetime import date
 from pathlib import Path
 
 from PySide6.QtCore import QSettings, Qt, QTimer
-from PySide6.QtGui import QAction, QKeySequence
+from PySide6.QtCore import QUrl
+from PySide6.QtGui import QAction, QDesktopServices, QKeySequence
 from PySide6.QtWidgets import (
     QFileDialog,
     QHBoxLayout,
@@ -19,6 +20,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from . import REPOSITORY, __version__
 from .binder import Binder
 from .capture import QuickCapture, append_idea, format_idea
 from .cast import CastPanel
@@ -238,6 +240,11 @@ class MainWindow(QMainWindow):
         help_menu = bar.addMenu("&Help")
         self._action(help_menu, "Screenplay Keys", self.show_screenplay_help)
         self._action(help_menu, "Board Keys", self.show_board_help)
+        help_menu.addSeparator()
+        self._action(help_menu, "User Guide", lambda: QDesktopServices.openUrl(QUrl(f"{REPOSITORY}/blob/main/docs/user-guide.md")))
+        self._action(help_menu, "Report a Problem…", lambda: QDesktopServices.openUrl(QUrl(f"{REPOSITORY}/issues")))
+        about = self._action(help_menu, f"About {APP_NAME}", self.show_about)
+        about.setMenuRole(QAction.MenuRole.AboutRole)  # lands in the app menu on macOS
 
     def _set_project_actions_enabled(self, enabled: bool) -> None:
         for action in self.project_actions:
@@ -750,6 +757,20 @@ class MainWindow(QMainWindow):
 
     def show_screenplay_help(self) -> None:
         QMessageBox.information(self, "Screenplay Keys", screenplay.__doc__.split("Keys:", 1)[1].strip("\n"))
+
+    def show_about(self) -> None:
+        from PySide6 import __version__ as pyside_version
+        from PySide6.QtCore import qVersion
+
+        QMessageBox.about(
+            self,
+            f"About {APP_NAME}",
+            f"<h3>{APP_NAME} {__version__}</h3>"
+            "<p>Screenplays, books, notes and ideas.</p>"
+            f'<p><a href="{REPOSITORY}">{REPOSITORY}</a></p>'
+            f"<p style='color:gray'>Built with Qt {qVersion()} and PySide6 {pyside_version} "
+            "(LGPLv3, <a href='https://www.qt.io/licensing/open-source-lgpl-obligations'>qt.io</a>).</p>",
+        )
 
     def show_board_help(self) -> None:
         from .editors import board as board_editor
