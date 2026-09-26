@@ -42,6 +42,9 @@ def test_entry_round_trip():
 def test_script_names():
     assert script_names({"name": "Mara Quinn"}) == ["MARA QUINN", "MARA"]
     assert script_names({"name": "Owen", "aliases": "owen, skipper"}) == ["OWEN", "SKIPPER"]
+    # adding another form never drops the name itself
+    assert script_names({"name": "Kacper", "aliases": "Kacprowi"}) == ["KACPER", "KACPROWI"]
+    assert script_names({"name": "Kacper Nowak", "aliases": "Kacpr*"}) == ["KACPER NOWAK", "KACPER", "KACPR*"]
     assert script_names({"name": "Lamp Room"}, LOCATION) == ["LAMP ROOM"]
     assert script_names({}) == []
 
@@ -72,7 +75,14 @@ def test_known_names():
         (CHARACTER, format_entry({"name": "Owen"}, "")),
         (LOCATION, format_entry({"name": "Lamp Room"}, "")),
     ]
-    assert known_names(entries) == (["MARA", "KEEPER", "OWEN"], ["LAMP ROOM"])
+    assert known_names(entries) == (["MARA", "KEEPER", "MARA QUINN", "OWEN"], ["LAMP ROOM"])
+
+
+def test_report_finds_name_and_other_forms():
+    fields = {"name": "Kacper", "aliases": "Kacprowi"}
+    text = "Kacper przyszedł. Dałem to Kacprowi."
+    report = character_report(script_names(fields), [("p", "Rozdział", "prose", text)])
+    assert [text[a.pos : a.pos + a.length] for a in report.appearances] == ["Kacper", "Kacprowi"]
 
 
 def test_legacy_script_names_key_becomes_aliases():

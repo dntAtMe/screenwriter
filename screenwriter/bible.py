@@ -78,21 +78,20 @@ def aliases(fields: dict[str, str]) -> list[str]:
     return [n.strip() for n in fields.get("aliases", fields.get("script names", "")).split(",") if n.strip()]
 
 
-def script_names(fields: dict[str, str], kind: str = CHARACTER) -> list[str]:
-    """The names to look for in scripts, upper-case.
-
-    Characters: the aliases, else the name and its first word.
-    Locations: the aliases, else the name.
-    """
-    given = [n.upper() for n in aliases(fields)]
-    if given:
-        return given
-    name = fields.get("name", "").strip().upper()
-    if not name:
-        return []
+def all_names(fields: dict[str, str], kind: str = CHARACTER) -> list[str]:
+    """Every name an entry goes by, as written: the name, a character's first
+    name ("Mara Quinn" → "Mara"), then the "also called" forms."""
+    name = fields.get("name", "").strip()
+    names = [name] if name else []
     if kind == CHARACTER and " " in name:
-        return [name, name.split()[0]]
-    return [name]
+        names.append(name.split()[0])
+    names += aliases(fields)
+    return list(dict.fromkeys(names))
+
+
+def script_names(fields: dict[str, str], kind: str = CHARACTER) -> list[str]:
+    """all_names, upper-case, as they appear in a script."""
+    return list(dict.fromkeys(n.upper() for n in all_names(fields, kind)))
 
 
 def entry_summary(text: str) -> str:
@@ -231,16 +230,15 @@ def location_report(names: list[str], docs: list[Document]) -> Report:
 
 def known_names(entries: list[tuple[str, str]]) -> tuple[list[str], list[str]]:
     """(character cue names, location names) from (kind, text) bible entries,
-    for the screenplay editor's completion."""
+    for the screenplay editor's completion: the forms first, then the name."""
     characters, locations = [], []
     for kind, text in entries:
         fields, _ = parse_entry(text)
-        if kind == CHARACTER:
-            given = [n.upper() for n in aliases(fields)]
-            names = given or ([fields["name"].strip().upper()] if fields.get("name", "").strip() else [])
-            characters += names[:1] + [n for n in given[1:]]
-        elif kind == LOCATION:
-            locations += script_names(fields, LOCATION)
+        name = fields.get("name", "").strip().upper()
+        names = [n.upper() for n in aliases(fields) if not n.endswith("*")] + ([name] if name else [])
+        (characters if kind == CHARACTER else locations if kind == LOCATION else []).extend(
+            n for n in dict.fromkeys(names) if n not in characters + locations
+        )
     return characters, locations
 
 
@@ -267,10 +265,7 @@ class BibleIndex:
             name = fields.get("name", "").strip()
             if not name:
                 continue
-            names = [name] + aliases(fields)
-            if kind == CHARACTER and not aliases(fields) and " " in name:
-                names.append(name.split()[0])  # "Mara Quinn" is also "Mara"
-            entry = IndexEntry(node_id, kind, name, entry_summary(text), list(dict.fromkeys(names)))
+            entry = IndexEntry(node_id, kind, name, entry_summary(text), all_names(fields, kind))
             self.entries.append(entry)
             for n in entry.names:
                 by_name.setdefault(n.lower(), entry)
