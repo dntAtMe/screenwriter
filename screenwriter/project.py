@@ -41,6 +41,8 @@ class Node:
     kind: str
     children: list[Node] = field(default_factory=list)
     expanded: bool = True
+    synopsis: str = ""  # shown on corkboard cards
+    label: str = ""  # colour label name, see corkboard.LABELS
 
     @property
     def is_document(self) -> bool:
@@ -48,6 +50,10 @@ class Node:
 
     def to_dict(self) -> dict:
         d = {"id": self.id, "title": self.title, "kind": self.kind}
+        if self.synopsis:
+            d["synopsis"] = self.synopsis
+        if self.label:
+            d["label"] = self.label
         if self.children:
             d["children"] = [c.to_dict() for c in self.children]
             d["expanded"] = self.expanded
@@ -61,6 +67,8 @@ class Node:
             kind=d.get("kind", PROSE),
             children=[cls.from_dict(c) for c in d.get("children", [])],
             expanded=d.get("expanded", True),
+            synopsis=d.get("synopsis", ""),
+            label=d.get("label", ""),
         )
 
 

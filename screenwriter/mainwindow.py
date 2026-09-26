@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
 
 from .binder import Binder
 from .capture import QuickCapture, append_idea, format_idea
+from .corkboard import CorkboardView
 from .exportdialog import run_export
 from .snapshotdialog import SnapshotsDialog
 from .snapshots import AUTO_NAME
@@ -90,6 +91,7 @@ class MainWindow(QMainWindow):
         self.binder.structureChanged.connect(self._save_structure)
         self.binder.renamed.connect(self._on_renamed)
         self.binder.deletedPermanently.connect(self._on_deleted)
+        self.binder.corkboardRequested.connect(self.open_corkboard)
 
         self.tabs = QTabWidget()
         self.tabs.setDocumentMode(True)
@@ -215,6 +217,7 @@ class MainWindow(QMainWindow):
             self._action(view, "Toggle Binder", self.toggle_binder, "Ctrl+\\"),
             self._action(view, "Toggle Side Panel", self.toggle_side, "Ctrl+Alt+\\"),
             self._action(view, "Outline", self.show_outline, "Ctrl+Shift+O"),
+            self._action(view, "Corkboard", self.open_selected_corkboard, "Ctrl+Alt+K"),
             self._action(view, "Focus Mode", self.toggle_focus, "Ctrl+Shift+D"),
         ]
         self._action(view, "Full Screen", self.toggle_fullscreen, "Ctrl+Meta+F")
@@ -325,6 +328,8 @@ class MainWindow(QMainWindow):
         node = self.project.find(node_id)
         if node is None:
             return
+        if node.kind == FOLDER:
+            return self.open_corkboard(node_id)
         if node.kind == SCREENPLAY:
             editor = ScreenplayEditor()
             editor.bible_names = self._bible_names
@@ -373,8 +378,10 @@ class MainWindow(QMainWindow):
             store.take(node.id, previous, self.project.doc_path(node).suffix, AUTO_NAME)
 
     def _current_node(self):
+        """The document in the current tab (not a corkboard's folder)."""
         editor = self.tabs.currentWidget()
-        return self.project.find(editor.node_id) if editor and self.project else None
+        node = self.project.find(editor.node_id) if editor and self.project else None
+        return node if node is not None and node.is_document else None
 
     def take_snapshot(self, name: str | None = None) -> None:
         node = self._current_node()
@@ -435,6 +442,8 @@ class MainWindow(QMainWindow):
         self._refresh_outline()
         if isinstance(editor, BibleEditor):
             editor.refresh_appearances()
+        elif isinstance(editor, CorkboardView):
+            editor.refresh()  # word counts may have changed
         if item := self.binder.find_item(editor.node_id):
             self.binder.blockSignals(True)
             self.binder.setCurrentItem(item)
@@ -442,9 +451,39 @@ class MainWindow(QMainWindow):
 
     def _on_renamed(self, node_id: str, title: str) -> None:
         if editor := self.editors.get(node_id):
-            self.tabs.setTabText(self.tabs.indexOf(editor), title)
+            self.tabs.setTabText(self.tabs.indexOf(editor), self._tab_title(editor, title))
             if isinstance(editor, BibleEditor):
                 editor.set_name(title)
+
+    @staticmethod
+    def _tab_title(editor, title: str) -> str:
+        return f"{title} — Corkboard" if isinstance(editor, CorkboardView) else title
+
+    def open_corkboard(self, folder_id: str) -> None:
+        if folder_id in self.editors:
+            self.tabs.setCurrentWidget(self.editors[folder_id])
+            return
+        self._save_structure()
+        node = self.project.find(folder_id)
+        if node is None or node.kind != FOLDER:
+            return
+        view = CorkboardView(self.binder, folder_id, self._text_of)
+        view.openRequested.connect(self.open_document)
+        view.statsChanged.connect(lambda v=view: self._update_stats(v))
+        view.statsChanged.connect(lambda v=view: self._schedule_outline(v))  # cards added, moved, renamed
+        view.cursorPositionChanged.connect(lambda v=view: self._on_cursor_moved(v))
+        self.binder.structureChanged.connect(view.refresh)
+        self.editors[folder_id] = view
+        self.tabs.setCurrentIndex(self.tabs.addTab(view, self._tab_title(view, node.title)))
+        view.setFocus()
+
+    def open_selected_corkboard(self) -> None:
+        """Corkboard of the selected folder, or of the selected document's folder."""
+        item = self.binder.currentItem()
+        while item is not None and item.data(0, Qt.ItemDataRole.UserRole + 1) != FOLDER:
+            item = item.parent()
+        if item is not None:
+            self.open_corkboard(item.data(0, Qt.ItemDataRole.UserRole))
 
     def _rename_from_editor(self, node_id: str, title: str) -> None:
         if title := title.strip():

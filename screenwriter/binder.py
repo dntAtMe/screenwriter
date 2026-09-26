@@ -9,6 +9,8 @@ from .project import BOARD, CHARACTER, DOCUMENT_KINDS, LOCATION, FOLDER, NOTE, P
 
 ID_ROLE = Qt.ItemDataRole.UserRole
 KIND_ROLE = Qt.ItemDataRole.UserRole + 1
+SYNOPSIS_ROLE = Qt.ItemDataRole.UserRole + 2
+LABEL_ROLE = Qt.ItemDataRole.UserRole + 3
 
 KIND_LABELS = {
     PROSE: "Prose Document", SCREENPLAY: "Screenplay", NOTE: "Note", BOARD: "Board",
@@ -37,6 +39,7 @@ def _letter_icon(letter: str, color: str) -> QIcon:
 
 class Binder(QTreeWidget):
     openRequested = Signal(str)       # node id
+    corkboardRequested = Signal(str)  # folder id
     structureChanged = Signal()
     renamed = Signal(str, str)        # node id, new title
     deletedPermanently = Signal(list)  # node ids
@@ -52,6 +55,7 @@ class Binder(QTreeWidget):
         self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.setAnimated(True)
         self.setIndentation(16)
+        self.setExpandsOnDoubleClick(False)  # double-clicking a folder opens its corkboard
 
         style = self.style()
         self.icons = {
@@ -88,6 +92,9 @@ class Binder(QTreeWidget):
         item.setData(0, ID_ROLE, node.id)
         item.setData(0, KIND_ROLE, node.kind)
         item.setIcon(0, self.icons[node.kind])
+        item.setData(0, SYNOPSIS_ROLE, node.synopsis)
+        item.setData(0, LABEL_ROLE, node.label)
+        item.setToolTip(0, node.synopsis)
         flags = Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsDropEnabled
         if node.kind != TRASH:
             flags |= Qt.ItemFlag.ItemIsEditable | Qt.ItemFlag.ItemIsDragEnabled
@@ -103,17 +110,57 @@ class Binder(QTreeWidget):
             self._restore_expanded(item, node.children)
 
     def to_nodes(self) -> list[Node]:
-        def convert(item: QTreeWidgetItem) -> Node:
-            return Node(
-                id=item.data(0, ID_ROLE),
-                title=item.text(0),
-                kind=item.data(0, KIND_ROLE),
-                children=[convert(item.child(i)) for i in range(item.childCount())],
-                expanded=item.isExpanded(),
-            )
-
         root = self.invisibleRootItem()
-        return [convert(root.child(i)) for i in range(root.childCount())]
+        return [self._item_to_node(root.child(i)) for i in range(root.childCount())]
+
+    def children_of(self, folder_id: str) -> list[Node]:
+        folder = self.find_item(folder_id)
+        return [self._item_to_node(folder.child(i)) for i in range(folder.childCount())] if folder else []
+
+    def set_synopsis(self, node_id: str, text: str) -> None:
+        if item := self.find_item(node_id):
+            self.blockSignals(True)
+            item.setData(0, SYNOPSIS_ROLE, text)
+            item.setToolTip(0, text)
+            self.blockSignals(False)
+            self.structureChanged.emit()
+
+    def set_label(self, node_id: str, label: str) -> None:
+        if item := self.find_item(node_id):
+            self.blockSignals(True)
+            item.setData(0, LABEL_ROLE, label)
+            self.blockSignals(False)
+            self.structureChanged.emit()
+
+    def reorder(self, folder_id: str, ids: list[str]) -> None:
+        """Put a folder's children in the given order (corkboard drags)."""
+        folder = self.find_item(folder_id)
+        if folder is None:
+            return
+        current = [folder.child(i).data(0, ID_ROLE) for i in range(folder.childCount())]
+        order = [i for i in ids if i in current] + [i for i in current if i not in ids]
+        if order == current:
+            return
+        self.blockSignals(True)
+        expanded = {}
+        items = {}
+        while folder.childCount():
+            item = folder.takeChild(0)
+            items[item.data(0, ID_ROLE)] = item
+            expanded[item.data(0, ID_ROLE)] = item.isExpanded()
+        for node_id in order:
+            folder.addChild(items[node_id])
+            items[node_id].setExpanded(expanded[node_id])
+        self.blockSignals(False)
+        self.structureChanged.emit()
+
+    def trash(self, node_id: str) -> None:
+        item = self.find_item(node_id)
+        if item is None or item.data(0, KIND_ROLE) == TRASH or self._in_trash(item):
+            return
+        (item.parent() or self.invisibleRootItem()).removeChild(item)
+        self._trash_item().addChild(item)
+        self.structureChanged.emit()
 
     def find_item(self, node_id: str) -> QTreeWidgetItem | None:
         def search(item):
@@ -142,7 +189,7 @@ class Binder(QTreeWidget):
     # --- actions --------------------------------------------------------------
 
     def add(self, kind: str, title: str | None = None, parent: QTreeWidgetItem | None = None,
-            edit: bool = True) -> str | None:
+            edit: bool = True, open_it: bool = True) -> str | None:
         """Add a node after the current item (or into it, for a folder), or into `parent`."""
         if self.project is None:
             return None
@@ -163,7 +210,7 @@ class Binder(QTreeWidget):
             owner.insertChild(owner.indexOfChild(current) + 1, item)
         self.setCurrentItem(item)
         self.structureChanged.emit()
-        if kind in DOCUMENT_KINDS:
+        if kind in DOCUMENT_KINDS and open_it:
             self.openRequested.emit(node.id)
         if edit:
             self.editItem(item)
@@ -200,9 +247,7 @@ class Binder(QTreeWidget):
             return
         parent = item.parent() or self.invisibleRootItem()
         if not self._in_trash(item):
-            parent.removeChild(item)
-            self._trash_item().addChild(item)
-            self.structureChanged.emit()
+            self.trash(item.data(0, ID_ROLE))
             return
         answer = QMessageBox.question(
             self, "Delete permanently",
@@ -220,6 +265,9 @@ class Binder(QTreeWidget):
         return Node(
             id=item.data(0, ID_ROLE), title=item.text(0), kind=item.data(0, KIND_ROLE),
             children=[self._item_to_node(item.child(i)) for i in range(item.childCount())],
+            expanded=item.isExpanded(),
+            synopsis=item.data(0, SYNOPSIS_ROLE) or "",
+            label=item.data(0, LABEL_ROLE) or "",
         )
 
     # --- events -----------------------------------------------------------------
@@ -227,6 +275,13 @@ class Binder(QTreeWidget):
     def _on_open(self, item: QTreeWidgetItem) -> None:
         if item.data(0, KIND_ROLE) in DOCUMENT_KINDS:
             self.openRequested.emit(item.data(0, ID_ROLE))
+
+    def mouseDoubleClickEvent(self, e):
+        item = self.itemAt(e.position().toPoint())
+        if item is not None and item.data(0, KIND_ROLE) == FOLDER:
+            self.corkboardRequested.emit(item.data(0, ID_ROLE))
+            return
+        super().mouseDoubleClickEvent(e)
 
     def _on_item_changed(self, item: QTreeWidgetItem) -> None:
         if not item.text(0).strip():
@@ -269,6 +324,9 @@ class Binder(QTreeWidget):
             action = QAction(self.icons[kind], f"New {KIND_LABELS[kind]}", menu)
             action.triggered.connect(lambda _=False, k=kind: self.add(k))
             menu.addAction(action)
+        if item and item.data(0, KIND_ROLE) == FOLDER:
+            menu.addSeparator()
+            menu.addAction("Open as Corkboard", lambda: self.corkboardRequested.emit(item.data(0, ID_ROLE)))
         if item and item.data(0, KIND_ROLE) != TRASH:
             menu.addSeparator()
             menu.addAction("Rename", self.rename_current)
