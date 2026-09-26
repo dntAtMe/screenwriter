@@ -23,7 +23,7 @@
 - **Ideas, search, outline.** Capture an idea from anywhere, search the whole project, and jump through scenes or headings from the outline.
 - **Export.** Industry-format screenplay PDF, Final Draft (`.fdx`), manuscript PDF and Word (`.docx`), Markdown, and board images.
 - **Nothing gets lost.** Autosave, a full project history with named versions, word-by-word comparison with any earlier version, and restore — of one document or everything.
-- **Sync and share.** Keep a project in Google Drive, Dropbox, iCloud or OneDrive and work on it from several computers; changes are merged, and nothing is overwritten. Send someone a copy as a single file.
+- **Sync and share.** Sign in with Google to keep projects in Google Drive, or use any cloud folder (Dropbox, iCloud, OneDrive); work on several computers, with changes merged and nothing overwritten. Send someone a copy as a single file.
 - **Your files stay yours.** A project is an ordinary folder of Markdown and Fountain text files — readable without the app, easy to back up or keep in git.
 
 | | |

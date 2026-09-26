@@ -28,6 +28,7 @@ cp -R "examples/The Lighthouse" /tmp/ && uv run python -m screenwriter "/tmp/The
 | `screenwriter/bible.py`, `board.py`, `snapshots.py` | story bible, boards, snapshots (Qt-free models) |
 | `screenwriter/projecthistory.py` | project history: save points in `.history/` (git objects via dulwich) |
 | `screenwriter/sync.py` | cloud-folder sync: `.screenwriter` package files, three-way merge, presence lock |
+| `screenwriter/google_drive.py`, `synctargets.py` | Sign in with Google (OAuth + PKCE) and Drive as a sync target — see [Google Drive setup](google-drive-setup.md) |
 | `screenwriter/export/` | screenplay PDF/FDX and manuscript PDF/Word/Markdown |
 | `screenwriter/resources/icon.png` | app icon — regenerate with `uv run python packaging/make_icon.py` |
 | `packaging/` | PyInstaller spec and per-platform installer scripts |

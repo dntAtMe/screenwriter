@@ -253,6 +253,22 @@ the other computer first keeps things simplest.
 Keep the **project folder itself outside** the cloud folder (for example in Documents) — sync goes through the
 single `.screenwriter` file. To stop, **File → Sync & Backup… → Stop Syncing**; the project stays where it is.
 
+### Sync with Google Drive (sign in with Google)
+
+You can also keep a project in Google Drive **without** the Google Drive app — useful on Linux, or on any
+computer where you'd rather not install it:
+
+1. **File → Sync & Backup… → Google Drive — Sign in with Google…**. Your browser opens; sign in and click
+   **Allow**. Screenwriter asks only for access to *the files it creates* — it can't see anything else in your Drive.
+2. The project is kept as a file in **My Drive/Screenwriter**, and syncs just like a cloud folder (merging, both
+   versions kept when needed, a notice when it's open elsewhere).
+3. **On your other computer**: **File → Open from Google Drive…**, sign in with the same account, pick the project
+   and where it should live.
+
+Screenwriter remembers the sign-in securely (Keychain, Credential Manager or Secret Service). To sign out:
+**File → Sync & Backup… → Sign Out of Google**. You can remove Screenwriter's access at any time in your
+Google Account under *Security → Your connections to third-party apps & services*.
+
 ### Share a copy
 
 **File → Share a Copy…** saves the project, with its history, as one `.screenwriter` file you can email or send.

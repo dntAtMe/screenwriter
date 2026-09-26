@@ -14,6 +14,9 @@ All notable changes to Screenwriter are listed here. The format follows
   project and its history live there as one `.screenwriter` file, synced on open, on close, every few minutes
   and when the file changes. Changes from two computers are merged; a document changed on both keeps both
   versions. A notice when the project is open on another computer.
+- **Sign in with Google**: sync projects through Google Drive directly, without the Drive app (works on Linux
+  too). Access is limited to files Screenwriter creates; the sign-in is kept in the system's secure store.
+  **File → Open from Google Drive…** sets a project up on another computer.
 - **Share a Copy…** and **Open Project File…** for `.screenwriter` files.
 
 ### Changed
