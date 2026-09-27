@@ -21,6 +21,8 @@ cp -R "examples/The Lighthouse" /tmp/ && uv run python -m screenwriter "/tmp/The
 |---|---|
 | `screenwriter/app.py` | entry point, smoke-test hooks for packaged builds |
 | `screenwriter/mainwindow.py` | window, menus, tabs, autosave; wires everything together |
+| `screenwriter/panes.py` | the tab area: one tab pane or a split of two, behind a QTabWidget-like interface |
+| `screenwriter/formatbar.py`, `shortcuthints.py`, `quickopen.py` | formatting toolbar, Ctrl/Alt shortcut hints, Go to Document (double Shift) |
 | `screenwriter/project.py` | on-disk project format (`project.json` + `docs/`) |
 | `screenwriter/binder.py` | the binder tree |
 | `screenwriter/editors/` | prose, screenplay, board and story-bible editors |

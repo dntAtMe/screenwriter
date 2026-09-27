@@ -21,7 +21,7 @@
 - **Books and chapters.** A calm, centred writing column with Markdown, word counts, and chapters you can reorder in the binder.
 - **A Story Bible.** Character and location sheets that know where they appear: scenes where a character speaks, how much they say, and every mention in your chapters. Names are underlined in your prose; alternative forms (nicknames, *Kacprowi* for Kacper, or `Kacpr*` for every ending) are recognised too.
 - **Mind maps and corkboards.** Brainstorm on a canvas of cards, or see a folder of chapters as index cards with synopses and drag them into order.
-- **Ideas, search, outline.** Capture an idea from anywhere, search the whole project, and jump through scenes or headings from the outline.
+- **Ideas, search, outline.** Capture an idea from anywhere, search the whole project, and jump through scenes or headings from the outline. Press `Shift` twice to jump to any document or card by name, and split the view to write with your notes beside you.
 - **Export.** Industry-format screenplay PDF, Final Draft (`.fdx`), manuscript PDF and Word (`.docx`), Markdown, and board images.
 - **Nothing gets lost.** Autosave, a full project history with named versions, word-by-word comparison with any earlier version, and restore — of one document or everything.
 - **Sync and share.** Sign in with Google to keep projects in Google Drive, or use any cloud folder (Dropbox, iCloud, OneDrive); work on several computers, with changes merged and nothing overwritten. Send someone a copy as a single file.

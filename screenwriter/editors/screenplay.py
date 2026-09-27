@@ -158,6 +158,7 @@ class ScreenplayEditor(TextDocumentAPI, QTextEdit):
         self.cue_block = -1      # block number in "character cue" mode after Tab
         self._cursor_block = 0
         self._applying = False
+        self._laid_out_unit = 0.0  # indent per character at the last layout
         self.highlighter = FountainHighlighter(self)
 
         # Edits that don't come through keyPressEvent (paste, drop, undo) get a full refresh.
@@ -261,7 +262,7 @@ class ScreenplayEditor(TextDocumentAPI, QTextEdit):
         if self._applying:
             return
         self._applying = True
-        cw = self._char_width()
+        cw = self._indent_unit()
         cursor = None
         block = self.document().begin()
         while block.isValid():
@@ -286,6 +287,7 @@ class ScreenplayEditor(TextDocumentAPI, QTextEdit):
             block = block.next()
         if cursor is not None:
             cursor.endEditBlock()
+        self._laid_out_unit = cw
         self._applying = False
 
     def zoom(self, steps: int) -> None:
@@ -299,9 +301,19 @@ class ScreenplayEditor(TextDocumentAPI, QTextEdit):
     def _recenter(self) -> None:
         center_column(self, PAGE_CHARS * self._char_width() + 2 * self.document().documentMargin())
 
+    def _indent_unit(self) -> float:
+        """Width of one character of indent: a character, or less when the editor is
+        narrower than a page (a split view), so dialogue keeps its shape instead of
+        being squeezed into a sliver."""
+        cw = self._char_width()
+        room = self.viewport().width() - 2 * self.document().documentMargin()
+        return min(cw, room / PAGE_CHARS) if room > 0 else cw
+
     def resizeEvent(self, e):
         self._recenter()  # before super(), which re-wraps text to the new viewport width
         super().resizeEvent(e)
+        if abs(self._indent_unit() - self._laid_out_unit) > 0.25:
+            self._apply_layout()
 
     # --- undo ---------------------------------------------------------------
 

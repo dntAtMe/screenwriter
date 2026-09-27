@@ -6,6 +6,18 @@ All notable changes to Screenwriter are listed here. The format follows
 
 ## [Unreleased]
 
+### Added
+- **Go to Document** (press `Shift` twice, or `Ctrl+P`): type part of a name to jump to any document, folder
+  corkboard or board card; open tabs come first. `Shift+Enter` opens it on the other side of a split view.
+- **Split view**: **View → Split Right** (`Ctrl+Alt+R`) or **Split Down** (`Ctrl+Alt+D`) shows two documents at
+  once. **Move Tab to Other Side** (`Ctrl+Alt+M`), **Focus Other Side** (`F6`), **Unsplit** (`Ctrl+Alt+W`).
+- **Switching tabs**: `Ctrl+Tab` / `Ctrl+Shift+Tab` (or `Ctrl+PgDown` / `Ctrl+PgUp`) for the next / previous tab,
+  `Alt+1` … `Alt+8` for a tab by position and `Alt+9` for the last one.
+
+### Changed
+- In a narrow editor (such as half of a split view) a screenplay's indents shrink with it, so dialogue keeps
+  its shape.
+
 ## [0.2.0] - 2026-09-27
 
 ### Added

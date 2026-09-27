@@ -302,6 +302,18 @@ Select what to export in the binder and choose **File → Export…** (`Ctrl+E`)
 
 ## Views and focus
 
+- **Go to Document**: press `Shift` twice quickly (or `Ctrl+P`), type part of a name and press `Enter`. It finds
+  documents, folders (opening their corkboard) and the cards on your boards; the letters only need to be in order
+  (`chk` finds *Chapter 1 — The Keeper*). Open tabs are listed first, most recent at the top. Add a space to search
+  by where things are too — `map lamp` finds a card about the lamp on the *Story Map*. `Shift+Enter` opens the
+  pick on the other side of a split view.
+- **Switch tabs** with `Ctrl+Tab` / `Ctrl+Shift+Tab` (or `Ctrl+PgDown` / `Ctrl+PgUp`); `Alt+1` … `Alt+8` go to a
+  tab by position, `Alt+9` to the last one.
+- **Split view**: **View → Split Right** (`Ctrl+Alt+R`) puts the current tab beside the others; **Split Down**
+  (`Ctrl+Alt+D`) puts it below. Each side has its own tabs, and new documents open on the side you're working in
+  (its current tab is underlined). A document is shown on one side at a time.
+  - **Move Tab to Other Side** (`Ctrl+Alt+M`) and **Focus Other Side** (`F6`) move between them.
+  - **Unsplit** (`Ctrl+Alt+W`) brings every tab back together; closing the last tab on one side does the same.
 - **Focus mode** (`Ctrl+Shift+D`) hides everything but the page. Press it again to come back.
 - **Full screen**: **View → Full Screen**.
 - **Zoom** (`Ctrl++` / `Ctrl+-`) changes the text size of the current document.
@@ -332,6 +344,11 @@ press the key you want, or let go, and it disappears. With `Alt` it also shows t
 | Search the project | `Ctrl+Shift+F` |
 | Screenplay element | `Ctrl+1` … `Ctrl+6` |
 | **View** | |
+| Go to document | `Shift` `Shift` or `Ctrl+P` |
+| Next / previous tab | `Ctrl+Tab` / `Ctrl+Shift+Tab` (`Ctrl+PgDown` / `Ctrl+PgUp`) |
+| Tab 1–8 / last tab | `Alt+1` … `Alt+8` / `Alt+9` |
+| Split right / down / unsplit | `Ctrl+Alt+R` / `Ctrl+Alt+D` / `Ctrl+Alt+W` |
+| Move tab / focus the other side | `Ctrl+Alt+M` / `F6` |
 | Outline / Corkboard | `Ctrl+Shift+O` / `Ctrl+Alt+K` |
 | Binder / side panel | `Ctrl+\` / `Ctrl+Alt+\` |
 | Focus mode | `Ctrl+Shift+D` |

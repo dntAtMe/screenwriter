@@ -27,6 +27,8 @@ from .cast import CastPanel
 from .corkboard import CorkboardView
 from .exportdialog import run_export
 from .formatbar import FormatBar
+from .panes import TabArea
+from .quickopen import DoubleShift, QuickOpen, Target
 from .shortcuthints import ShortcutHints
 from .snapshotdialog import SnapshotsDialog
 from .historydialog import HistoryDialog
@@ -108,12 +110,8 @@ class MainWindow(QMainWindow):
         self.binder.deletedPermanently.connect(self._on_deleted)
         self.binder.corkboardRequested.connect(self.open_corkboard)
 
-        self.tabs = QTabWidget()
-        self.tabs.setDocumentMode(True)
-        self.tabs.setTabsClosable(True)
-        self.tabs.setMovable(True)
-        self.tabs.setElideMode(Qt.TextElideMode.ElideRight)
-        self.tabs.tabBar().setExpanding(False)
+        self.tabs = TabArea()  # one tab pane, or two when the view is split
+        self.tab_history: list[str] = []  # node ids, most recently viewed first
         self.tabs.tabCloseRequested.connect(self.close_tab)
         self.tabs.currentChanged.connect(self._on_tab_changed)
 
@@ -187,6 +185,8 @@ class MainWindow(QMainWindow):
         self._build_menus()
         self._update_format_bar()
         self.shortcut_hints = ShortcutHints(self)
+        self.double_shift = DoubleShift(self)
+        self.double_shift.triggered.connect(self.quick_open)
         self.shortcut_hints.set_enabled(self.hints_action.isChecked())
         self._set_project_actions_enabled(False)
         self.welcome.set_recent(self._recent())
@@ -267,6 +267,26 @@ class MainWindow(QMainWindow):
             self._action(view, "Corkboard", self.open_selected_corkboard, "Ctrl+Alt+K"),
             self._action(view, "Focus Mode", self.toggle_focus, "Ctrl+Shift+D"),
         ]
+        view.addSeparator()
+        self.project_actions.append(self._action(view, "Go to Document…", self.quick_open, "Ctrl+P"))
+        next_tab = self._action(view, "Next Tab", lambda: self.tabs.next_tab(1))
+        next_tab.setShortcuts([QKeySequence("Ctrl+Tab"), QKeySequence("Ctrl+PgDown")])
+        prev_tab = self._action(view, "Previous Tab", lambda: self.tabs.next_tab(-1))
+        prev_tab.setShortcuts([QKeySequence("Ctrl+Shift+Tab"), QKeySequence("Ctrl+PgUp")])
+        go_to = view.addMenu("Go to Tab")
+        tab_actions = [next_tab, prev_tab]
+        for n in range(1, 10):
+            tab_actions.append(self._action(go_to, "Last Tab" if n == 9 else f"Tab {n}", lambda _=False, n=n: self.tabs.go_to_tab(n), f"Alt+{n}"))
+        view.addSeparator()
+        split = [
+            self._action(view, "Split Right", lambda: self.split(Qt.Orientation.Horizontal), "Ctrl+Alt+R"),
+            self._action(view, "Split Down", lambda: self.split(Qt.Orientation.Vertical), "Ctrl+Alt+D"),
+            self._action(view, "Move Tab to Other Side", self.tabs.move_to_other_pane, "Ctrl+Alt+M"),
+            self._action(view, "Focus Other Side", self.tabs.focus_other_pane, "F6"),
+            self._action(view, "Unsplit", self.tabs.unsplit, "Ctrl+Alt+W"),
+        ]
+        self.project_actions += tab_actions + split
+        view.addSeparator()
         self.toolbar_action = self._action(view, "Formatting Toolbar", self._toggle_format_bar)
         self.toolbar_action.setCheckable(True)
         self.toolbar_action.setChecked(self.settings.value("format_bar", True, type=bool))
@@ -921,6 +941,9 @@ class MainWindow(QMainWindow):
             self.stats_label.clear()
             self.element_label.clear()
             return
+        if editor.node_id in self.tab_history:
+            self.tab_history.remove(editor.node_id)
+        self.tab_history.insert(0, editor.node_id)
         self._update_stats(editor)
         self.element_label.setText("")
         self._refresh_outline()
@@ -997,7 +1020,7 @@ class MainWindow(QMainWindow):
             editor = editor.notes
         target = editor if isinstance(editor, (ScreenplayEditor, ProseEditor)) else None
         self.format_bar.set_editor(target)
-        focused = self.tabs.tabBar().isHidden()
+        focused = self.tabs.tab_bars_hidden()
         self.format_bar.setVisible(target is not None and self.toolbar_action.isChecked() and not focused)
 
     def _toggle_shortcut_hints(self) -> None:
@@ -1199,6 +1222,72 @@ class MainWindow(QMainWindow):
             self.project.write_text(inbox, existing + append_idea(existing, idea))
         self.statusBar().showMessage(f"Idea saved to “{inbox.title}”", 3000)
 
+    # --- go to document / split view ------------------------------------------------
+
+    def _quick_open_targets(self) -> list[Target]:
+        """Everything Go to Document can open: open tabs (most recent first), then every
+        document, folder and board card in binder order."""
+        if self.project is None:
+            return []
+        self._save_structure()
+        open_ids = set(self._open_tab_ids())
+        targets: list[Target] = []
+
+        def visit(nodes, path: str) -> None:
+            for node in nodes:
+                if node.kind == TRASH:
+                    continue
+                if node.kind == FOLDER:
+                    targets.append(Target(node.title, f"{path} › Corkboard" if path else "Corkboard", FOLDER, node.id,
+                                          is_open=node.id in open_ids))
+                elif node.kind in DOCUMENT_KINDS:
+                    targets.append(Target(node.title, path, node.kind, node.id, is_open=node.id in open_ids))
+                    if node.kind == BOARD:
+                        editor = self.editors.get(node.id)
+                        cards = editor.search_text() if editor else board.search_text(self.project.read_text(node))
+                        for i, card in enumerate(cards.split("\n") if cards else []):
+                            if card.strip():
+                                targets.append(Target(card.strip()[:80], f"Card on {node.title}", BOARD, node.id, line=i))
+                visit(node.children, f"{path} › {node.title}" if path else node.title)
+
+        visit(self.project.root, "")
+        recent = {node_id: i for i, node_id in enumerate(self.tab_history)}
+        opened = sorted((t for t in targets if t.is_open), key=lambda t: recent.get(t.node_id, len(recent)))
+        return opened + [t for t in targets if not t.is_open]
+
+    def quick_open(self) -> None:
+        if self.project is None:
+            return
+        dialog = QuickOpen(self._quick_open_targets(), self.binder.icons, self)
+        if dialog.exec() and dialog.chosen:
+            self.go_to(dialog.chosen, beside=dialog.beside)
+
+    def go_to(self, target: Target, beside: bool = False) -> None:
+        self.open_document(target.node_id)
+        editor = self.editors.get(target.node_id)
+        if editor is None:
+            return
+        if beside:
+            self.open_beside(editor)
+        if target.line is not None:
+            editor.jump_to_line(target.line)
+        editor.setFocus()
+
+    def open_beside(self, editor) -> None:
+        """Show a tab in the other half of the view, splitting it if needed."""
+        if not self.tabs.is_split():
+            self.tabs.setCurrentWidget(editor)
+            self.tabs.split(self.tabs.orientation())
+        elif self.tabs.active.indexOf(editor) >= 0:
+            self.tabs.move_to_other_pane(editor)
+        else:
+            self.tabs.setCurrentWidget(editor)
+
+    def split(self, orientation) -> None:
+        if self.tabs.count() < 2 and not self.tabs.is_split():
+            self.statusBar().showMessage("Open another document to split the view — it goes on the other side", 4000)
+        self.tabs.split(orientation)
+
     # --- view -------------------------------------------------------------------
 
     def toggle_binder(self) -> None:
@@ -1222,7 +1311,7 @@ class MainWindow(QMainWindow):
         self.binder.setVisible(not focused)
         self.side.setVisible(not focused)
         self.statusBar().setVisible(not focused)
-        self.tabs.tabBar().setVisible(not focused)
+        self.tabs.set_tab_bars_visible(not focused)
         if focused:
             self.find_bar.hide()
         self._update_format_bar()
@@ -1261,6 +1350,8 @@ class MainWindow(QMainWindow):
         self.settings.setValue("splitter", self.splitter.saveState())
         self.close_project()
         QApplication.instance().removeEventFilter(self.shortcut_hints)
+        QApplication.instance().removeEventFilter(self.double_shift)
+        self.tabs.detach()
         # While Qt tears the window down it still emits signals (tab changes,
         # selection changes); don't let them reach half-destroyed Python objects.
         for timer in (self.save_timer, self.outline_timer, self.bible_timer, self.history_timer, self.sync_timer):
