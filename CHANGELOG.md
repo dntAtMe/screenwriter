@@ -6,6 +6,8 @@ All notable changes to Screenwriter are listed here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-27
+
 ### Added
 - **Project history**: automatic save points of the whole project (on open, every few minutes of changes, on
   close) and named versions (**Save Version…**). **History…** shows what each save point changed, compares any
@@ -57,5 +59,6 @@ The first release.
 - Packages for macOS (`.dmg`), Windows (installer and portable `.zip`) and Linux (`.AppImage`, `.tar.gz`).
 - Released under the MIT License.
 
-[Unreleased]: https://github.com/dntAtMe/screenwriter/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/dntAtMe/screenwriter/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/dntAtMe/screenwriter/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/dntAtMe/screenwriter/releases/tag/v0.1.0

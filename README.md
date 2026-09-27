@@ -17,6 +17,7 @@
 ## What it does
 
 - **Screenplays that format themselves.** Type plain [Fountain](https://fountain.io) and it's laid out like a script page: `int` becomes `INT.`, a name in caps becomes a character cue, `cut to` becomes a transition. Character names, locations and times of day are suggested as you type.
+- **No markup to memorise.** A formatting toolbar above the page adds screenplay elements, bold, italic, headings and notes for you; hold `Ctrl` or `Alt` to see every shortcut that starts with those keys.
 - **Books and chapters.** A calm, centred writing column with Markdown, word counts, and chapters you can reorder in the binder.
 - **A Story Bible.** Character and location sheets that know where they appear: scenes where a character speaks, how much they say, and every mention in your chapters. Names are underlined in your prose; alternative forms (nicknames, *Kacprowi* for Kacper, or `Kacpr*` for every ending) are recognised too.
 - **Mind maps and corkboards.** Brainstorm on a canvas of cards, or see a folder of chapters as index cards with synopses and drag them into order.
