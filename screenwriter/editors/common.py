@@ -53,6 +53,14 @@ class TextDocumentAPI:
         cursor.insertText(text)
         cursor.endEditBlock()
 
+    def apply_edit(self, change) -> None:
+        """Run change(cursor) on the text cursor as one undoable edit (toolbar buttons)."""
+        cursor = self.textCursor()
+        cursor.beginEditBlock()
+        change(cursor)
+        cursor.endEditBlock()
+        self.setTextCursor(cursor)
+
     def selected_text(self) -> str:
         text = self.textCursor().selectedText()
         return "" if "\u2029" in text else text  # no multi-line selections

@@ -18,6 +18,11 @@ All notable changes to Screenwriter are listed here. The format follows
   too). Access is limited to files Screenwriter creates; the sign-in is kept in the system's secure store.
   **File → Open from Google Drive…** sets a project up on another computer.
 - **Share a Copy…** and **Open Project File…** for `.screenwriter` files.
+- **Formatting toolbar** above the page: screenplay elements (showing the current line's), bold, italic,
+  underline, notes, sections, synopses and centered text in scripts; headings, bold, italic, quotes, scene breaks
+  and notes in prose. Buttons add or remove the markup for you. **View → Formatting Toolbar** hides it.
+- **Shortcut hints**: hold `Ctrl` or `Alt` for a moment to see every shortcut that starts with the keys you're
+  holding; add `Shift` to narrow the list. **View → Shortcut Hints** turns them off.
 
 ### Changed
 - Per-document snapshots are replaced by project history; existing ones are under **File → Older Snapshots…**.

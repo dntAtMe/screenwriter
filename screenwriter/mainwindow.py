@@ -26,6 +26,8 @@ from .capture import QuickCapture, append_idea, format_idea
 from .cast import CastPanel
 from .corkboard import CorkboardView
 from .exportdialog import run_export
+from .formatbar import FormatBar
+from .shortcuthints import ShortcutHints
 from .snapshotdialog import SnapshotsDialog
 from .historydialog import HistoryDialog
 from .projecthistory import ProjectHistory
@@ -116,10 +118,12 @@ class MainWindow(QMainWindow):
         self.tabs.currentChanged.connect(self._on_tab_changed)
 
         self.find_bar = FindBar(self._current_text_editor)
+        self.format_bar = FormatBar()
         center = QWidget()
         center_layout = QVBoxLayout(center)
         center_layout.setContentsMargins(0, 0, 0, 0)
         center_layout.setSpacing(0)
+        center_layout.addWidget(self.format_bar)
         center_layout.addWidget(self.tabs)
         center_layout.addWidget(self.find_bar)
 
@@ -181,6 +185,9 @@ class MainWindow(QMainWindow):
         self.save_timer.timeout.connect(self.save_all)
 
         self._build_menus()
+        self._update_format_bar()
+        self.shortcut_hints = ShortcutHints(self)
+        self.shortcut_hints.set_enabled(self.hints_action.isChecked())
         self._set_project_actions_enabled(False)
         self.welcome.set_recent(self._recent())
         self.setWindowTitle(APP_NAME)
@@ -260,6 +267,12 @@ class MainWindow(QMainWindow):
             self._action(view, "Corkboard", self.open_selected_corkboard, "Ctrl+Alt+K"),
             self._action(view, "Focus Mode", self.toggle_focus, "Ctrl+Shift+D"),
         ]
+        self.toolbar_action = self._action(view, "Formatting Toolbar", self._toggle_format_bar)
+        self.toolbar_action.setCheckable(True)
+        self.toolbar_action.setChecked(self.settings.value("format_bar", True, type=bool))
+        self.hints_action = self._action(view, "Shortcut Hints (hold Ctrl or Alt)", self._toggle_shortcut_hints)
+        self.hints_action.setCheckable(True)
+        self.hints_action.setChecked(self.settings.value("shortcut_hints", True, type=bool))
         self._action(view, "Full Screen", self.toggle_fullscreen, "Ctrl+Meta+F")
         view.addSeparator()
         self.project_actions += [
@@ -294,6 +307,7 @@ class MainWindow(QMainWindow):
         editor = self.tabs.currentWidget()
         if isinstance(editor, ScreenplayEditor):
             editor.set_element(el)
+            self.format_bar.sync_element()
 
     # --- projects ---------------------------------------------------------------
 
@@ -902,6 +916,7 @@ class MainWindow(QMainWindow):
         self.save_all()
         self._update_element_actions()
         editor = self.tabs.widget(index)
+        self._update_format_bar()
         if editor is None:
             self.stats_label.clear()
             self.element_label.clear()
@@ -973,6 +988,25 @@ class MainWindow(QMainWindow):
     def _update_element(self, editor, name: str) -> None:
         if editor is self.tabs.currentWidget():
             self.element_label.setText(name)
+            self.format_bar.sync_element()
+
+    def _update_format_bar(self) -> None:
+        """Point the formatting toolbar at the current tab; hide it where there's nothing to format."""
+        editor = self.tabs.currentWidget()
+        if isinstance(editor, BibleEditor):
+            editor = editor.notes
+        target = editor if isinstance(editor, (ScreenplayEditor, ProseEditor)) else None
+        self.format_bar.set_editor(target)
+        focused = self.tabs.tabBar().isHidden()
+        self.format_bar.setVisible(target is not None and self.toolbar_action.isChecked() and not focused)
+
+    def _toggle_shortcut_hints(self) -> None:
+        self.settings.setValue("shortcut_hints", self.hints_action.isChecked())
+        self.shortcut_hints.set_enabled(self.hints_action.isChecked())
+
+    def _toggle_format_bar(self) -> None:
+        self.settings.setValue("format_bar", self.toolbar_action.isChecked())
+        self._update_format_bar()
 
     def export_current(self) -> None:
         """Export the item selected in the binder (or the current tab's document)."""
@@ -1191,6 +1225,7 @@ class MainWindow(QMainWindow):
         self.tabs.tabBar().setVisible(not focused)
         if focused:
             self.find_bar.hide()
+        self._update_format_bar()
 
     def toggle_fullscreen(self) -> None:
         self.showNormal() if self.isFullScreen() else self.showFullScreen()
@@ -1225,6 +1260,7 @@ class MainWindow(QMainWindow):
         self.settings.setValue("geometry", self.saveGeometry())
         self.settings.setValue("splitter", self.splitter.saveState())
         self.close_project()
+        QApplication.instance().removeEventFilter(self.shortcut_hints)
         # While Qt tears the window down it still emits signals (tab changes,
         # selection changes); don't let them reach half-destroyed Python objects.
         for timer in (self.save_timer, self.outline_timer, self.bible_timer, self.history_timer, self.sync_timer):

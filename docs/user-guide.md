@@ -57,6 +57,10 @@ Prose documents and notes use [Markdown](https://commonmark.org/help/), shown as
 | `***` on its own line | a scene break |
 | `[[a note to yourself]]` | an inline note — greyed out, and left out of exports |
 
+You don't have to type the marks: the **formatting toolbar** above the page has **H1–H3**, **B**, **I**,
+**Quote**, **Scene Break** and **Note**. Select text (or put the cursor on a line) and press a button; press it
+again to take the formatting off. **View → Formatting Toolbar** hides or shows it.
+
 The word count is in the status bar; select text to count just that.
 
 ## Writing screenplays
@@ -94,6 +98,9 @@ makes it a character (`@McCLANE`).
 - Typing `cut to`, `fade out` or `dissolve to` and pressing Enter makes a proper transition.
 - **Ctrl+1 … Ctrl+6** turn the current line into Scene Heading, Action, Character, Parenthetical, Dialogue or
   Transition (**Format** menu), adding whatever Fountain needs.
+- Or use the **formatting toolbar** above the page: the element buttons do the same as `Ctrl+1 … Ctrl+6`, and the
+  current line's element is highlighted. **B**, **I**, **U** and **Note** mark the selection; **Section**,
+  **Synopsis** and **Centered** change the current line. Press a button again to undo its formatting.
 
 ### Suggestions
 
@@ -301,6 +308,11 @@ Select what to export in the binder and choose **File → Export…** (`Ctrl+E`)
 - Hide the binder with `Ctrl+\` and the side panel with `Ctrl+Alt+\`.
 
 ## Keyboard shortcuts
+
+**Don't memorise them**: hold `Ctrl` (`⌘` on macOS) or `Alt` for a moment and a panel lists every shortcut that
+starts with the keys you're holding. Add `Shift` (or the other key) and the list narrows to those combinations;
+press the key you want, or let go, and it disappears. With `Alt` it also shows the letters that open each menu.
+**View → Shortcut Hints** turns this off.
 
 | | |
 |---|---|

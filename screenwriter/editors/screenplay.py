@@ -311,6 +311,14 @@ class ScreenplayEditor(TextDocumentAPI, QTextEdit):
         self.history.end(0)
         self._full_refresh()
 
+    def apply_edit(self, change) -> None:
+        self.history.begin(self.textCursor().position())
+        super().apply_edit(change)
+        self.history.end(self.textCursor().position())
+        self.cue_block = -1
+        self._full_refresh()
+        self.elementChanged.emit(EL_NAMES[self.current_element()])
+
     def can_undo(self) -> bool:
         return self.history.can_undo()
 
