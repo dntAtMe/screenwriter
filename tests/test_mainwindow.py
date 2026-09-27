@@ -420,3 +420,60 @@ def test_people_see_each_other(window, tmp_path, monkeypatch):
     anna._check_people()
     assert anna.others == [] and anna.presence_banner.isHidden() and anna.binder.presence == {}
     dispose(ben)
+
+
+def test_updates_from_others(window, tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+
+    from screenwriter.sync import package_name
+    from screenwriter.synctargets import FolderTarget
+
+    monkeypatch.setattr(QMessageBox, "information", staticmethod(lambda *a, **k: None))
+    anna = window
+    anna.person_name = lambda: "Anna"
+    anna.history.person = "Anna"
+    package = tmp_path / "Network Drive" / package_name(anna.project.name)
+    package.parent.mkdir()
+    anna._set_target(FolderTarget(package))
+    anna.sync_now()
+    anna.settings.remove(f"sync_local/{anna.project.id}")
+    ben = MainWindow()
+    ben.person_name = lambda: "Ben"
+    ben.open_project_file(str(package), str(tmp_path / "ben"), keep_synced=True)
+    ben.history.person = "Ben"
+    ben.history.machine = "BEN-PC"
+
+    anna.open_document("ch01")
+    anna.side.setCurrentWidget(anna.outline)
+    ben.open_document("ch02")
+    ben.editors["ch02"].replace_all(ben.editors["ch02"].text() + "\n\nThree more words.")
+    ben.sync_now()
+    anna.sync_now()
+
+    assert anna.binder.unread == {"ch02"}  # bold in the binder until Anna opens it
+    assert anna.side.tabText(anna.side.indexOf(anna.updates)) == "Updates (1)"
+    top = anna.updates.tree.topLevelItem(0)
+    assert top.text(0).startswith("Ben ·") and top.font(0).bold()
+    assert top.child(0).text(0) == "Chapter 2 — Fog — +3 words"
+
+    anna.side.setCurrentWidget(anna.updates)  # looking at it counts as seen
+    assert anna.side.tabText(anna.side.indexOf(anna.updates)) == "Updates"
+    anna.side.setCurrentWidget(anna.outline)
+    anna._refresh_updates()
+    assert not anna.updates.tree.topLevelItem(0).font(0).bold()
+
+    anna.open_document("ch02")
+    assert anna.binder.unread == set()
+    dispose(ben)
+
+
+def test_arrived_names_everyone(window, tmp_path):
+    from screenwriter.updates import arrived
+
+    before = window.history.head()
+    for person, doc, text in (("Ben", "ch02", "b"), ("Cleo", "pilot", "c"), ("Ben", "ch01", "b2")):
+        window.history.person = person
+        window.project.write_text(window.project.find(doc), text)
+        window.history.save_point()
+    assert arrived(window.history, before) == ["Ben", "Cleo"]
+    assert arrived(window.history, window.history.head()) == []

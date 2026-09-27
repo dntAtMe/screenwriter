@@ -274,6 +274,11 @@ with **Sync & Backup…**, the others with **File → Open Project File…**).
 - **The same document**: when someone else has the document in front of you open too, a note above the page says
   so. You can keep writing — different paragraphs merge, and if you both change the same paragraph you'll choose
   which version to keep (see above).
+- **What's new**: when a sync brings in other people's changes, the status bar says who changed what, and those
+  documents turn **bold** in the binder until you open them. The **Updates** tab in the side panel lists recent
+  changes by everyone else (and by you on your other computers) — who, when, which documents and how many words —
+  with the ones since you last looked in bold and counted on the tab. Double-click a document to open it, or
+  **Show Changes…** to see exactly what changed in History.
 
 Everyone sees the others within about half a minute on a network drive; through a cloud service it takes as long
 as that service takes to sync.

@@ -31,6 +31,7 @@ from .exportdialog import run_export
 from . import merge, people
 from .formatbar import FormatBar
 from .panes import TabArea
+from .updates import UpdatesPanel, arrived, recent_updates
 from .quickopen import DoubleShift, QuickOpen, Target
 from .shortcuthints import ShortcutHints
 from .historydialog import HistoryDialog
@@ -145,6 +146,11 @@ class MainWindow(QMainWindow):
         self.cast = CastPanel(self.binder.icons)
         self.cast.openRequested.connect(self.open_document)
         self.side.addTab(self.cast, "Cast")
+        self.updates = UpdatesPanel()
+        self.updates.openRequested.connect(self.open_document)
+        self.updates.historyRequested.connect(lambda path: self.show_history(path))
+        self.side.addTab(self.updates, "Updates")
+        self.side.currentChanged.connect(lambda _: self._refresh_updates())
         self.bible_index = bible.BibleIndex()
         self.bible_timer = QTimer(self, singleShot=True, interval=600)
         self.bible_timer.timeout.connect(self._refresh_bible)
@@ -398,6 +404,8 @@ class MainWindow(QMainWindow):
         self._remember(project.path)
         self._refresh_bible()
         self._update_conflicts_button()
+        self.binder.set_unread(set(self.settings.value(f"unread/{project.id}", []) or []))
+        self._refresh_updates()
         if self.sync_target:
             self._start_sync()
         for node_id in self.settings.value(f"open_tabs/{project.path}", []) or []:
@@ -421,6 +429,9 @@ class MainWindow(QMainWindow):
         self.sync_target = None
         self.sync_label.clear()
         self.conflicts_button.hide()
+        self.binder.set_unread(set())
+        self.updates.set_updates([], self.person_name(), None)
+        self.side.setTabText(self.side.indexOf(self.updates), "Updates")
         self.history.pack()
         self.history.close()
         self.history = None
@@ -549,11 +560,11 @@ class MainWindow(QMainWindow):
     def _readable(path: str, text: str) -> str:
         return board.search_text(text) if path.endswith(".board.json") else text
 
-    def show_history(self) -> None:
+    def show_history(self, path: str | None = None) -> None:
         if self.project is None:
             return
         self.save_point()
-        node = self._current_node()
+        node = self.project.find(self._node_id_for(path)) if path else self._current_node()
         HistoryDialog(
             self.history,
             current_text=self._current_text_for,
@@ -676,6 +687,7 @@ class MainWindow(QMainWindow):
                 QMessageBox.warning(self, "Sync", target.unavailable_reason())
             return None
         self.save_point()
+        before = self.history.head()
         QApplication.setOverrideCursor(Qt.CursorShape.BusyCursor)
         try:
             package = target.prepare(self.project)
@@ -694,7 +706,7 @@ class MainWindow(QMainWindow):
         self.sync_label.setToolTip(target.describe())
         self._check_people()
         if result.status in ("downloaded", "merged"):
-            self.statusBar().showMessage(f"Brought in changes from {result.machine}", 5000)
+            self._note_incoming(result, arrived(self.history, before) or [result.machine])
         self._update_conflicts_button()
         if any(not c.copy_path for c in result.conflicts):
             self.statusBar().showMessage(
@@ -798,6 +810,42 @@ class MainWindow(QMainWindow):
             f"{names} {verb} this open too. Edits to different paragraphs merge when you sync; "
             "if you both change the same paragraph, you'll choose which version to keep.")
         self.presence_banner.show()
+
+    # --- updates ----------------------------------------------------------------------------
+
+    def _set_unread(self, ids: set[str]) -> None:
+        self.binder.set_unread(ids)
+        if self.project:
+            self.settings.setValue(f"unread/{self.project.id}", sorted(ids))
+
+    def _note_incoming(self, result, who: list[str]) -> None:
+        """After a sync brought in someone's changes: say what, and mark those documents unread."""
+        ids = {self._node_id_for(p) for p in result.changed if p.startswith("docs/")}
+        nodes = [n for n in (self.project.find(i) for i in ids) if n is not None]
+        current = getattr(self.tabs.currentWidget(), "node_id", None)
+        self._set_unread(self.binder.unread | {n.id for n in nodes if n.id != current})
+        and_list = lambda items: ", ".join(items[:-1]) + " and " + items[-1] if len(items) > 1 else "".join(items)
+        titles = [n.title for n in nodes]
+        what = and_list(titles[:3] + ([f"{len(titles) - 3} more"] if len(titles) > 3 else []))
+        names = and_list(who)
+        self.statusBar().showMessage(f"{names} changed {what}" if titles else f"Brought in changes from {names}", 8000)
+        self._refresh_updates()
+
+    def _refresh_updates(self) -> None:
+        """Fill the Updates tab; looking at it counts as having seen them."""
+        if self.project is None or self.history is None:
+            return
+        key = f"updates_seen/{self.project.id}"
+        seen = self.settings.value(key)
+        seen_time = datetime.fromisoformat(seen) if seen else None
+        new = self.updates.set_updates(recent_updates(self.history, self.person_name(), self.history.machine),
+                                       self.person_name(), seen_time)
+        index = self.side.indexOf(self.updates)
+        if self.side.currentWidget() is self.updates and not self.side.isHidden():
+            self.settings.setValue(key, datetime.now().astimezone().isoformat(timespec="seconds"))
+            self.side.setTabText(index, "Updates")
+        else:
+            self.side.setTabText(index, f"Updates ({new})" if new else "Updates")
 
     # --- conflicts ----------------------------------------------------------------------
 
@@ -1058,6 +1106,8 @@ class MainWindow(QMainWindow):
         editor = self.tabs.widget(index)
         self._update_format_bar()
         self._update_banner()
+        if editor is not None and editor.node_id in self.binder.unread:
+            self._set_unread(self.binder.unread - {editor.node_id})
         if self.sync_target:
             self.announce_timer.start()
         if editor is None:

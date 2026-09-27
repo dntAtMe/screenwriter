@@ -11,6 +11,9 @@ All notable changes to Screenwriter are listed here. The format follows
   set your name once (**File → Your Name…**); the status bar shows who else has the project open, the binder marks
   the documents they have open with their coloured initial, and a note above the page says when someone has the
   same document open. Save points, merges and conflicts show who made the changes.
+- **Updates** tab in the side panel: recent changes by other people (and your other computers) — who, when,
+  which documents, words added or removed — with what's new since you last looked in bold. Documents someone
+  else changed are bold in the binder until you open them, and a notice says who changed what when it arrives.
 
 ### Changed
 - **Sync merges paragraph by paragraph**: when two people (or computers) edit the same document, changes to

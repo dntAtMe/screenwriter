@@ -31,6 +31,11 @@ class PresenceDelegate(QStyledItemDelegate):
         super().__init__(binder)
         self.binder = binder
 
+    def initStyleOption(self, option, index):
+        super().initStyleOption(option, index)
+        if index.data(ID_ROLE) in self.binder.unread:  # changed by someone else since you last looked
+            option.font.setBold(True)
+
     def paint(self, painter, option, index):
         super().paint(painter, option, index)
         badges = self.binder.presence.get(index.data(ID_ROLE))
@@ -99,6 +104,7 @@ class Binder(QTreeWidget):
 
         style = self.style()
         self.presence: dict[str, list[tuple[str, str]]] = {}  # node id -> [(name, colour)] of people there
+        self.unread: set[str] = set()  # documents others changed that you haven't opened since
         self.setItemDelegate(PresenceDelegate(self))
         self.icons = {
             FOLDER: style.standardIcon(QStyle.StandardPixmap.SP_DirIcon),
@@ -124,6 +130,11 @@ class Binder(QTreeWidget):
         """Who else has which document open: {node id: [(name, colour)]}."""
         if presence != self.presence:
             self.presence = presence
+            self.viewport().update()
+
+    def set_unread(self, unread: set[str]) -> None:
+        if unread != self.unread:
+            self.unread = set(unread)
             self.viewport().update()
 
     def load(self, project: Project) -> None:
