@@ -28,7 +28,7 @@ from PySide6.QtWidgets import (
 
 from .editors.common import word_count
 from .projecthistory import Change, ProjectHistory, SavePoint, machine_name
-from .snapshots import DIFF_CSS, diff_html
+from .diff import DIFF_CSS, diff_html
 
 ROLE = Qt.ItemDataRole.UserRole
 BINDER = "project.json"

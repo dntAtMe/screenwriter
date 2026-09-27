@@ -183,13 +183,6 @@ def test_history_dialog_lists_changes(window):
     dialog.deleteLater()
 
 
-def test_permanent_delete_removes_snapshots(window):
-    node = window.project.find("ch02")
-    window.project.snapshots.take("ch02", "x", ".md")
-    window.project.delete_files(node)
-    assert window.project.snapshots.list("ch02") == []
-
-
 def _add_script(window, text):
     node_id = window.binder.add("screenplay", "Test Script", edit=False)
     window.editors[node_id].set_text(text)

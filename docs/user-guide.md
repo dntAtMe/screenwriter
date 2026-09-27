@@ -224,8 +224,7 @@ old folder. **Restore Whole Project…** puts everything back the way it was. Ei
 saved as a version first (“Before restoring…”), so you can always change your mind; restoring an open document
 can also be undone with `Ctrl+Z`.
 
-History lives in a hidden `.history` folder inside the project. Snapshots made by earlier versions of the app
-are still under **File → Older Snapshots…**.
+History lives in a hidden `.history` folder inside the project.
 
 ## Sync, backup and sharing
 

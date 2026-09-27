@@ -46,7 +46,7 @@ class TextDocumentAPI:
         return self.textCursor().blockNumber()
 
     def replace_all(self, text: str) -> None:
-        """Replace the whole document as one undoable edit (restoring a snapshot)."""
+        """Replace the whole document as one undoable edit (restoring a version from History)."""
         cursor = QTextCursor(self.document())
         cursor.beginEditBlock()
         cursor.select(QTextCursor.SelectionType.Document)

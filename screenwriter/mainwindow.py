@@ -32,7 +32,6 @@ from .formatbar import FormatBar
 from .panes import TabArea
 from .quickopen import DoubleShift, QuickOpen, Target
 from .shortcuthints import ShortcutHints
-from .snapshotdialog import SnapshotsDialog
 from .historydialog import HistoryDialog
 from .projecthistory import ProjectHistory
 from . import sync as cloud
@@ -228,7 +227,6 @@ class MainWindow(QMainWindow):
             self._action(file, "Export…", self.export_current, "Ctrl+E"),
             self._action(file, "Save Version…", self.save_version, "Ctrl+Alt+S"),
             self._action(file, "History…", self.show_history, "Ctrl+Alt+H"),
-            self._action(file, "Older Snapshots…", self.show_older_snapshots),
             self._action(file, "Sync & Backup…", self.show_sync_settings),
             self._action(file, "Review Conflicts…", self.review_conflicts),
             self._action(file, "Share a Copy…", self.share_copy),
@@ -954,28 +952,6 @@ class MainWindow(QMainWindow):
             self.settings.setValue(f"sync/{project_id}", str(package_path))
             self.settings.setValue(f"sync_local/{project_id}", str(path))
         self.open_project(path)
-
-    def show_older_snapshots(self) -> None:
-        """Per-document snapshots from before project history existed."""
-        node = self._current_node()
-        if node is None or not self.project.snapshots.list(node.id):
-            QMessageBox.information(self, "Older Snapshots", "This document has no snapshots from earlier versions of the app.\n"
-                                    "Its history is in File → History.")
-            return
-        readable = (lambda t: board.search_text(t)) if node.kind == BOARD else (lambda t: t)
-
-        def restore(text: str) -> None:
-            self.save_point(f"Before restoring “{node.title}”")
-            self.open_document(node.id)
-            self.editors[node.id].replace_all(text)
-            self.save_all()
-
-        SnapshotsDialog(
-            self.project.snapshots, node.id, node.title,
-            current_text=lambda: self._text_of(node),
-            take=lambda name: self.save_version(name or f"Version of {node.title}"),
-            restore=restore, readable=readable, parent=self,
-        ).exec()
 
     def close_tab(self, index: int) -> None:
         if index >= 0:
