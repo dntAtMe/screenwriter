@@ -5,6 +5,7 @@ import pytest
 from conftest import dispose
 from PySide6.QtCore import QSettings
 
+from screenwriter import people
 from screenwriter.mainwindow import MainWindow
 
 SAMPLE = Path(__file__).parent.parent / "examples" / "The Lighthouse"
@@ -370,3 +371,52 @@ def test_share_a_copy_and_open_it(window, tmp_path, monkeypatch):
     assert other.project.name == window.project.name and other.sync_target is None
     assert other.history.log()  # history came along
     dispose(other)
+
+
+def test_people_see_each_other(window, tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+
+    from screenwriter.sync import package_name
+    from screenwriter.synctargets import FolderTarget
+
+    monkeypatch.setattr(QMessageBox, "information", staticmethod(lambda *a, **k: None))
+    anna = window
+    anna.person_name = lambda: "Anna"
+    anna.history.person = "Anna"
+    package = tmp_path / "Network Drive" / package_name(anna.project.name)
+    package.parent.mkdir()
+    anna._set_target(FolderTarget(package))
+    anna.sync_now()
+    anna.settings.remove(f"sync_local/{anna.project.id}")
+    ben = MainWindow()
+    ben.person_name = lambda: "Ben"
+    ben.open_project_file(str(package), str(tmp_path / "ben"), keep_synced=True)
+    ben.history.person = "Ben"
+
+    anna.open_document("ch01")
+    ben.open_document("pilot")
+    anna._check_people()
+    ben._check_people()
+    anna._check_people()
+    assert [p.person for p in anna.others] == ["Ben"] and anna.others[0].doc_title == "Pilot"
+    assert "Ben" in anna.people_label.text() and "Anna" in ben.people_label.text()
+    assert anna.binder.presence == {"pilot": [("Ben", people.colour_for("Ben"))]}
+    assert anna.presence_banner.isHidden()  # Ben isn't in Anna's chapter
+
+    ben.open_document("ch01")  # now he is
+    ben._check_people()
+    anna._check_people()
+    assert not anna.presence_banner.isHidden() and "Ben" in anna.presence_banner.text()
+
+    # changes carry the writer's name
+    ben.editors["ch01"].replace_all("Ben was here.")
+    ben.sync_now()
+    anna.sync_now()
+    assert anna.history.log()[0].person in ("Ben", "Anna")
+    assert any(p.person == "Ben" for p in anna.history.log())
+
+    # closing the project takes you off the list
+    ben.close_project()
+    anna._check_people()
+    assert anna.others == [] and anna.presence_banner.isHidden() and anna.binder.presence == {}
+    dispose(ben)

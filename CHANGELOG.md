@@ -6,6 +6,12 @@ All notable changes to Screenwriter are listed here. The format follows
 
 ## [Unreleased]
 
+### Added
+- **Writing together** through a shared folder (a network drive, or a shared Dropbox/OneDrive/Drive folder):
+  set your name once (**File → Your Name…**); the status bar shows who else has the project open, the binder marks
+  the documents they have open with their coloured initial, and a note above the page says when someone has the
+  same document open. Save points, merges and conflicts show who made the changes.
+
 ### Changed
 - **Sync merges paragraph by paragraph**: when two people (or computers) edit the same document, changes to
   different paragraphs combine, and boards merge card by card. Only the same paragraph changed differently is a
@@ -13,6 +19,7 @@ All notable changes to Screenwriter are listed here. The format follows
   side by side to keep either or both. Conflicts sync, so anyone can resolve them.
 
 ### Removed
+- The single “open on another computer” notice; presence (above) replaces it, for any number of people.
 - **File → Older Snapshots…** and the per-document snapshots from before project history. A project's
   `snapshots` folder is no longer read; everything since 0.2.0 is in **History…**.
 

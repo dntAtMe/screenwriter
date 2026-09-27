@@ -28,7 +28,7 @@ import tempfile
 import uuid
 import zipfile
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 
 from dulwich.client import LocalGitClient
@@ -42,7 +42,6 @@ PACKAGE_EXT = ".screenwriter"
 FORMAT = 1
 REMOTE_REF = b"refs/remotes/cloud/main"
 BINDER = "project.json"
-LOCK_FRESH = timedelta(minutes=3)
 
 
 class SyncError(Exception):
@@ -145,40 +144,6 @@ def share(history: ProjectHistory, project_id: str, name: str, dest: Path) -> No
 
 
 # --- presence ---------------------------------------------------------------------------------
-
-
-def lock_path(package: Path) -> Path:
-    return package.with_name(package.name + ".lock")
-
-
-def write_lock(package: Path, machine: str, project_id: str) -> None:
-    data = {"machine": machine, "project_id": project_id,
-            "heartbeat": datetime.now(timezone.utc).isoformat(timespec="seconds")}
-    try:
-        lock_path(package).write_text(json.dumps(data), encoding="utf-8")
-    except OSError:
-        pass
-
-
-def remove_lock(package: Path, machine: str) -> None:
-    lock = lock_path(package)
-    try:
-        if json.loads(lock.read_text(encoding="utf-8")).get("machine") == machine:
-            lock.unlink()
-    except (OSError, ValueError):
-        pass
-
-
-def open_elsewhere(package: Path, machine: str) -> str | None:
-    """The other computer that has this project open right now, if any."""
-    try:
-        data = json.loads(lock_path(package).read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return None
-    beat = datetime.fromisoformat(data.get("heartbeat", "1970-01-01T00:00:00+00:00"))
-    if data.get("machine") != machine and datetime.now(timezone.utc) - beat < LOCK_FRESH:
-        return data.get("machine")
-    return None
 
 
 # --- merging --------------------------------------------------------------------------------------
@@ -376,7 +341,7 @@ def sync(history: ProjectHistory, project_id: str, name: str, package: Path) -> 
             write_package(history, project_id, name, package)
             return SyncResult("uploaded")
         return SyncResult("up-to-date")
-    their_machine = history.get(remote).machine
+    their_machine = history.get(remote).person
     if _is_ancestor(history.repo, local, remote):  # only they changed: take theirs
         changed = [c.path for c in history.changes(remote, against=local)]
         history.set_head(remote)
@@ -387,7 +352,7 @@ def sync(history: ProjectHistory, project_id: str, name: str, package: Path) -> 
     base_files = history.files_at(bases[0]) if bases else {}
     ours = history.files_at(local)
     theirs = history.files_at(remote)
-    merged, conflicts = merge_files(base_files, ours, theirs, their_machine, history.machine)
+    merged, conflicts = merge_files(base_files, ours, theirs, their_machine, history.person or history.machine)
     message = f"Merged changes from {their_machine}"
     commit = history.commit_files(merged, message, [local, remote])
     history.set_head(commit)

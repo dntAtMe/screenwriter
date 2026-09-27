@@ -1,8 +1,16 @@
 """The binder: a drag-and-drop tree of folders and documents."""
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QRectF, Qt, Signal
 from PySide6.QtGui import QAction, QColor, QFont, QIcon, QPainter, QPixmap
-from PySide6.QtWidgets import QAbstractItemView, QMenu, QMessageBox, QStyle, QTreeWidget, QTreeWidgetItem
+from PySide6.QtWidgets import (
+    QAbstractItemView,
+    QMenu,
+    QMessageBox,
+    QStyle,
+    QStyledItemDelegate,
+    QTreeWidget,
+    QTreeWidgetItem,
+)
 
 from .editors.board import NODE_MIME
 from .project import BOARD, CHARACTER, DOCUMENT_KINDS, LOCATION, FOLDER, NOTE, PROSE, SCREENPLAY, TRASH, Node, Project, walk
@@ -16,6 +24,38 @@ KIND_LABELS = {
     PROSE: "Prose Document", SCREENPLAY: "Screenplay", NOTE: "Note", BOARD: "Board",
     CHARACTER: "Character", LOCATION: "Location", FOLDER: "Folder",
 }
+class PresenceDelegate(QStyledItemDelegate):
+    """Draws a coloured initial at the right of documents other people have open."""
+
+    def __init__(self, binder: "Binder"):
+        super().__init__(binder)
+        self.binder = binder
+
+    def paint(self, painter, option, index):
+        super().paint(painter, option, index)
+        badges = self.binder.presence.get(index.data(ID_ROLE))
+        if not badges:
+            return
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        size = min(option.rect.height() - 4, 16)
+        font = QFont(option.font)
+        font.setPixelSize(int(size * 0.62))
+        font.setBold(True)
+        painter.setFont(font)
+        x = option.rect.right() - 4
+        for name, colour in reversed(badges):
+            x -= size
+            circle = QRectF(x, option.rect.center().y() - size / 2, size, size)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QColor(colour))
+            painter.drawEllipse(circle)
+            painter.setPen(QColor("white"))
+            painter.drawText(circle, Qt.AlignmentFlag.AlignCenter, name[:1].upper())
+            x -= 2
+        painter.restore()
+
+
 DEFAULT_TITLES = {PROSE: "Untitled Chapter", SCREENPLAY: "Untitled Screenplay", NOTE: "Untitled Note", BOARD: "Untitled Board", CHARACTER: "New Character", LOCATION: "New Location", FOLDER: "New Folder"}
 
 
@@ -58,6 +98,8 @@ class Binder(QTreeWidget):
         self.setExpandsOnDoubleClick(False)  # double-clicking a folder opens its corkboard
 
         style = self.style()
+        self.presence: dict[str, list[tuple[str, str]]] = {}  # node id -> [(name, colour)] of people there
+        self.setItemDelegate(PresenceDelegate(self))
         self.icons = {
             FOLDER: style.standardIcon(QStyle.StandardPixmap.SP_DirIcon),
             TRASH: style.standardIcon(QStyle.StandardPixmap.SP_TrashIcon),
@@ -77,6 +119,12 @@ class Binder(QTreeWidget):
         self.customContextMenuRequested.connect(self._context_menu)
 
     # --- model <-> tree ---------------------------------------------------------
+
+    def set_presence(self, presence: dict[str, list[tuple[str, str]]]) -> None:
+        """Who else has which document open: {node id: [(name, colour)]}."""
+        if presence != self.presence:
+            self.presence = presence
+            self.viewport().update()
 
     def load(self, project: Project) -> None:
         self.project = project

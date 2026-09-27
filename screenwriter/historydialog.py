@@ -145,11 +145,13 @@ class HistoryDialog(QDialog):
             if point.auto and not self.show_auto.isChecked():
                 continue
             label = f"{when_label(point.time)} — {point.title}"
-            if point.machine != here:
+            if point.person != point.machine:  # a named writer
+                label += f"   · {point.person}" + (f" on {point.machine}" if point.machine != here else "")
+            elif point.machine != here:
                 label += f"   · on {point.machine}"
             item = QListWidgetItem(label)
             item.setData(ROLE, point)
-            item.setToolTip(f"{point.title}\n{point.time:%A %d %B %Y, %H:%M:%S}\n{point.machine}")
+            item.setToolTip(f"{point.title}\n{point.time:%A %d %B %Y, %H:%M:%S}\n{point.person} on {point.machine}")
             if not point.auto:
                 item.setFont(bold)
             else:

@@ -1,14 +1,17 @@
 """Where a project syncs to: a cloud folder, or Google Drive signed in directly.
 
 Both keep the same .screenwriter package (see sync.py). A target hands the sync
-engine a local package file, and afterwards publishes it if anything changed.
+engine a local package file, and afterwards publishes it if anything changed. It also
+keeps the presence records of the people who have the project open (see people.py).
 """
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from pathlib import Path
 
+from . import people
 from . import sync as cloud
 from .google_drive import DriveClient, DriveError
 
@@ -54,14 +57,14 @@ class FolderTarget:
         except OSError:
             return None
 
-    def lock(self, machine: str, project_id: str) -> None:
-        cloud.write_lock(self.package, machine, project_id)
+    def announce(self, presence: people.Presence) -> None:
+        people.write_presence(self.package, presence)
 
-    def unlock(self, machine: str) -> None:
-        cloud.remove_lock(self.package, machine)
+    def leave(self, session: str) -> None:
+        people.remove_presence(self.package, session)
 
-    def other_machine(self, machine: str) -> str | None:
-        return cloud.open_elsewhere(self.package, machine)
+    def others(self, session: str) -> list[people.Presence]:
+        return people.read_presence(self.package, session)
 
 
 class DriveTarget:
@@ -133,24 +136,54 @@ class DriveTarget:
         meta = self._meta()
         return meta is not None and meta.properties.get("head") != self.head
 
-    def lock(self, machine: str, project_id: str) -> None:
-        if self.client and self.file_id:
-            self.client.set_properties(self.file_id, {
-                "open_on": machine, "heartbeat": datetime.now(timezone.utc).isoformat(timespec="seconds")})
+    # Presence lives in the package file's appProperties, one short key per open window
+    # ("p_<session>"). Drive allows 124 bytes for a key and its value together.
 
-    def unlock(self, machine: str) -> None:
-        if self.client and self.file_id and self._props.get("open_on") in (machine, None):
+    PRESENCE = "p_"
+
+    @staticmethod
+    def _encode(p: people.Presence) -> str:
+        title = p.doc_title
+        while True:
+            value = json.dumps({"n": p.person, "m": p.machine, "d": p.doc_id, "t": title, "h": p.heartbeat},
+                               ensure_ascii=False, separators=(",", ":"))
+            if len((DriveTarget.PRESENCE + p.session + value).encode("utf-8")) <= 124 or not title:
+                return value
+            title = title[:-1]
+
+    def _presences(self) -> list[people.Presence]:
+        out = []
+        for key, value in self._props.items():
+            if key.startswith(self.PRESENCE):
+                try:
+                    d = json.loads(value)
+                    out.append(people.Presence(key.removeprefix(self.PRESENCE), d.get("n", ""), d.get("m", ""),
+                                               d.get("d", ""), d.get("t", ""), d.get("h", "")))
+                except (ValueError, AttributeError):
+                    continue
+        return out
+
+    def announce(self, presence: people.Presence) -> None:
+        if not (self.client and self.file_id):
+            return
+        people.stamp(presence)
+        changes = {self.PRESENCE + p.session: None for p in self._presences() if not p.fresh}  # tidy up
+        changes[self.PRESENCE + presence.session] = self._encode(presence)
+        self.client.set_properties(self.file_id, changes)
+        self._props.update({k: v for k, v in changes.items() if v is not None})
+        for k in [k for k, v in changes.items() if v is None]:
+            self._props.pop(k, None)
+
+    def leave(self, session: str) -> None:
+        if self.client and self.file_id:
             try:
-                self.client.set_properties(self.file_id, {"open_on": None, "heartbeat": None})
+                self.client.set_properties(self.file_id, {self.PRESENCE + session: None})
             except DriveError:
                 pass
 
-    def other_machine(self, machine: str) -> str | None:
-        other, beat = self._props.get("open_on"), self._props.get("heartbeat")
-        if not other or other == machine or not beat:
-            return None
-        age = datetime.now(timezone.utc) - datetime.fromisoformat(beat)
-        return other if age < cloud.LOCK_FRESH else None
+    def others(self, session: str) -> list[people.Presence]:
+        return sorted((p for p in self._presences() if p.session != session and p.fresh),
+                      key=lambda p: (p.person.lower(), p.machine))
 
 
 def target_from_key(key: str, project_id: str, client: DriveClient | None, cache_dir: Path):

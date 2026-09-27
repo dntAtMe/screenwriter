@@ -257,11 +257,26 @@ problem, if the cloud folder can't be reached — usually because the cloud app 
 - a document edited on one computer and deleted on the other is kept.
 
 Nothing is ever overwritten, and every sync is in the project's history, so it can be undone from **History…**.
-If a project is open on another computer when you open it, Screenwriter tells you. It works, but closing it on
-the other computer first keeps things simplest.
 
 Keep the **project folder itself outside** the cloud folder (for example in Documents) — sync goes through the
 single `.screenwriter` file. To stop, **File → Sync & Backup… → Stop Syncing**; the project stays where it is.
+
+### Writing together
+
+Several people can work on one project through a **shared folder** — a network drive, or a Dropbox, OneDrive or
+Google Drive folder you've shared. Each of you sets up sync with the same `.screenwriter` file (the first person
+with **Sync & Backup…**, the others with **File → Open Project File…**).
+
+- **Your name**: Screenwriter asks for it the first time you set up sync (change it with **File → Your Name…**).
+  It's recorded with your changes — in **History…**, in conflicts, and in “Brought in changes from Anna”.
+- **Who's here**: the status bar lists everyone else who has the project open, each with their own colour; hover
+  for what they're looking at. In the binder, a coloured initial marks the documents others have open.
+- **The same document**: when someone else has the document in front of you open too, a note above the page says
+  so. You can keep writing — different paragraphs merge, and if you both change the same paragraph you'll choose
+  which version to keep (see above).
+
+Everyone sees the others within about half a minute on a network drive; through a cloud service it takes as long
+as that service takes to sync.
 
 ### Sync with Google Drive (sign in with Google)
 
@@ -270,10 +285,13 @@ computer where you'd rather not install it:
 
 1. **File → Sync & Backup… → Google Drive — Sign in with Google…**. Your browser opens; sign in and click
    **Allow**. Screenwriter asks only for access to *the files it creates* — it can't see anything else in your Drive.
-2. The project is kept as a file in **My Drive/Screenwriter**, and syncs just like a cloud folder (merging, both
-   versions kept when needed, a notice when it's open elsewhere).
+2. The project is kept as a file in **My Drive/Screenwriter**, and syncs just like a cloud folder (merging,
+   conflicts to review, and showing your other computers when they have it open).
 3. **On your other computer**: **File → Open from Google Drive…**, sign in with the same account, pick the project
    and where it should live.
+
+This is for **your own computers**: Screenwriter can only see files it created in *your* Drive, so to write
+together with other people, use a shared folder instead (see *Writing together*).
 
 Screenwriter remembers the sign-in securely (Keychain, Credential Manager or Secret Service). To sign out:
 **File → Sync & Backup… → Sign Out of Google**. You can remove Screenwriter's access at any time in your

@@ -1,3 +1,4 @@
+import html
 from datetime import datetime
 from pathlib import Path
 
@@ -27,7 +28,7 @@ from .cast import CastPanel
 from .corkboard import CorkboardView
 from .conflictdialog import ConflictDialog
 from .exportdialog import run_export
-from . import merge
+from . import merge, people
 from .formatbar import FormatBar
 from .panes import TabArea
 from .quickopen import DoubleShift, QuickOpen, Target
@@ -123,7 +124,13 @@ class MainWindow(QMainWindow):
         center_layout.setContentsMargins(0, 0, 0, 0)
         center_layout.setSpacing(0)
         center_layout.addWidget(self.format_bar)
-        center_layout.addWidget(self.tabs)
+        self.presence_banner = QLabel()
+        self.presence_banner.setWordWrap(True)
+        self.presence_banner.setStyleSheet(
+            "background: rgba(240, 179, 90, 0.18); border-left: 3px solid #f0b35a; padding: 6px 12px;")
+        self.presence_banner.hide()
+        center_layout.addWidget(self.presence_banner)
+        center_layout.addWidget(self.tabs, 1)  # the page takes the room; the bars above stay their own size
         center_layout.addWidget(self.find_bar)
 
         # Right-hand side panel: document outline and project search.
@@ -167,6 +174,8 @@ class MainWindow(QMainWindow):
         self.conflicts_button.clicked.connect(self.review_conflicts)
         self.conflicts_button.hide()
         self.statusBar().addPermanentWidget(self.conflicts_button)
+        self.people_label = QLabel()
+        self.statusBar().addPermanentWidget(self.people_label)
         self.statusBar().addPermanentWidget(self.sync_label)
         self.stats_label = QLabel()
         self.element_label = QLabel()
@@ -185,6 +194,14 @@ class MainWindow(QMainWindow):
         self.google_account = GoogleAccount.restore(self.google_config) if self.google_config else None
         self.sync_timer = QTimer(self, interval=60 * 1000)
         self.sync_timer.timeout.connect(self._check_cloud)
+
+        # Presence: who else has the project open, and where (see people.py).
+        self.session = people.new_session()
+        self.others: list[people.Presence] = []
+        self.presence_timer = QTimer(self, interval=30 * 1000)
+        self.presence_timer.timeout.connect(self._check_people)
+        self.announce_timer = QTimer(self, singleShot=True, interval=1500)  # after switching tabs
+        self.announce_timer.timeout.connect(self._check_people)
 
         # Autosave: shortly after typing stops, and always on tab switch / close.
         self.save_timer = QTimer(self, singleShot=True, interval=1500)
@@ -221,6 +238,7 @@ class MainWindow(QMainWindow):
         self._action(file, "Open Project…", self.open_project_dialog, "Ctrl+O")
         self._action(file, "Open Project File…", self.open_project_file)
         self._action(file, "Open from Google Drive…", self.open_from_google_drive)
+        self._action(file, "Your Name…", self.set_your_name)
         file.addSeparator()
         self.project_actions = [
             self._action(file, "Save", self.save_all, QKeySequence.StandardKey.Save),
@@ -368,6 +386,8 @@ class MainWindow(QMainWindow):
         self.project = project
         self.binder.load(project)
         self.history = ProjectHistory(project.path)
+        self.history.person = self.person_name()
+        self.session = people.new_session()
         self.history.save_point()  # whatever changed outside the app since last time
         self.history_timer.start()
         key = self.settings.value(f"sync/{project.id}")
@@ -393,9 +413,11 @@ class MainWindow(QMainWindow):
         if self.sync_target:
             self.sync_now(quiet=True, reload=False)
             try:
-                self.sync_target.unlock(self.history.machine)
+                self.sync_target.leave(self.session)
             except (DriveError, TargetError, OSError):
                 pass
+        self.presence_timer.stop()
+        self._clear_people()
         self.sync_target = None
         self.sync_label.clear()
         self.conflicts_button.hide()
@@ -613,37 +635,28 @@ class MainWindow(QMainWindow):
         self.settings.setValue(f"sync_local/{self.project.id}", str(self.project.path))
 
     def _start_sync(self) -> None:
-        """On opening a synced project: say if it's open elsewhere, then bring it up to date."""
+        """On opening a synced project: bring it up to date and see who else is here."""
         self.sync_timer.start()
         if not self.sync_target.available():
             self.sync_label.setText("☁ Not syncing")
             self.sync_label.setToolTip(self.sync_target.unavailable_reason())
             return
-        result = self.sync_now(quiet=True)
-        other = self.sync_target.other_machine(self.history.machine) if result is not None else None
-        if other:
-            QMessageBox.information(
-                self, "Open on another computer",
-                f"“{self.project.name}” is open on {other} right now.\n\n"
-                "You can keep writing here — changes from both computers are merged when they sync — "
-                "but it's simplest to close it there first.",
-            )
+        self.presence_timer.start()
+        if self.sync_now(quiet=True) is not None and self.others:
+            names = ", ".join(p.label(self.person_name()) for p in self.others)
+            self.statusBar().showMessage(f"Also working on this project: {names}", 8000)
 
     def _check_cloud(self) -> None:
-        """Every minute: keep the presence marker fresh and pull if the cloud copy changed."""
+        """Every minute: pull if the cloud copy changed."""
         if not self.project or not self.sync_target or not self.sync_target.available():
             return
         try:
             changed = self.sync_target.changed()
-            self.sync_target.lock(self.history.machine, self.project.id)
         except (DriveError, TargetError, OSError) as e:
             self._sync_failed(e, quiet=True)
             return
         if changed:
             self.sync_now(quiet=True)
-        other = self.sync_target.other_machine(self.history.machine)
-        if other and "also open" not in self.sync_label.text():
-            self.sync_label.setText(self.sync_label.text() + f" · also open on {other}")
 
     def _sync_failed(self, error: Exception, quiet: bool) -> None:
         self.sync_label.setText("☁ Sync problem" if not isinstance(error, DriveError) else "☁ Can't reach Google Drive")
@@ -668,7 +681,6 @@ class MainWindow(QMainWindow):
             package = target.prepare(self.project)
             result = cloud.sync(self.history, self.project.id, self.project.name, package)
             target.finish(result, self.project)
-            target.lock(self.history.machine, self.project.id)
         except (cloud.SyncError, DriveError, TargetError, OSError) as e:
             self._sync_failed(e, quiet)
             return None
@@ -680,6 +692,7 @@ class MainWindow(QMainWindow):
             self._reload_after_sync(result.changed)
         self.sync_label.setText(f"☁ Synced {datetime.now():%H:%M}")
         self.sync_label.setToolTip(target.describe())
+        self._check_people()
         if result.status in ("downloaded", "merged"):
             self.statusBar().showMessage(f"Brought in changes from {result.machine}", 5000)
         self._update_conflicts_button()
@@ -718,6 +731,73 @@ class MainWindow(QMainWindow):
                 editor.set_text(self.project.read_text(node))
         self._refresh_bible()
         self._refresh_outline()
+
+    # --- people ---------------------------------------------------------------------------
+
+    def person_name(self) -> str:
+        return self.settings.value("person/name", "") or people.default_name()
+
+    def set_your_name(self) -> None:
+        name, ok = QInputDialog.getText(
+            self, "Your Name",
+            "Your name, shown to the people you share projects with\n(on your changes, and next to what you're working on):",
+            text=self.person_name())
+        if ok and name.strip():
+            self.settings.setValue("person/name", name.strip())
+            if self.history:
+                self.history.person = name.strip()
+            self._check_people()
+
+    def _presence_here(self) -> people.Presence:
+        editor = self.tabs.currentWidget()
+        node = self.project.find(editor.node_id) if editor is not None and self.project else None
+        return people.Presence(self.session, self.person_name(), self.history.machine,
+                               node.id if node else "", node.title if node else "")
+
+    def _check_people(self) -> None:
+        """Tell the others where we are, and see where they are."""
+        target = self.sync_target
+        if not self.project or not target or not target.available():
+            return self._clear_people()
+        try:
+            target.announce(self._presence_here())
+            self.others = target.others(self.session)
+        except (DriveError, TargetError, OSError):
+            return
+        self._show_people()
+
+    def _clear_people(self) -> None:
+        self.others = []
+        self._show_people()
+
+    def _show_people(self) -> None:
+        me = self.person_name()
+        dot = lambda p: f'<span style="color:{people.colour_for(p.person)}">●</span>'
+        self.people_label.setText("  ".join(f"{dot(p)} {html.escape(p.label(me))}" for p in self.others))
+        self.people_label.setToolTip("\n".join(
+            f"{p.label(me)} — {p.doc_title or 'no document open'}" for p in self.others))
+        where: dict[str, list[tuple[str, str]]] = {}
+        for p in self.others:
+            if p.doc_id:
+                where.setdefault(p.doc_id, []).append((p.person, people.colour_for(p.person)))
+        self.binder.set_presence(where)
+        self._update_banner()
+
+    def _update_banner(self) -> None:
+        """Say so when someone else has the document in front of you open too."""
+        editor = self.tabs.currentWidget()
+        node_id = getattr(editor, "node_id", None)
+        here = [p for p in self.others if node_id and p.doc_id == node_id]
+        if not here:
+            self.presence_banner.hide()
+            return
+        me = self.person_name()
+        names = " and ".join(f'<b style="color:{people.colour_for(p.person)}">{html.escape(p.label(me))}</b>' for p in here)
+        verb = "has" if len(here) == 1 else "have"
+        self.presence_banner.setText(
+            f"{names} {verb} this open too. Edits to different paragraphs merge when you sync; "
+            "if you both change the same paragraph, you'll choose which version to keep.")
+        self.presence_banner.show()
 
     # --- conflicts ----------------------------------------------------------------------
 
@@ -763,12 +843,14 @@ class MainWindow(QMainWindow):
     def _stop_syncing(self) -> None:
         if self.sync_target:
             try:
-                self.sync_target.unlock(self.history.machine)
+                self.sync_target.leave(self.session)
             except (DriveError, TargetError, OSError):
                 pass
         self.settings.remove(f"sync/{self.project.id}")
         self.sync_target = None
         self.sync_timer.stop()
+        self.presence_timer.stop()
+        self._clear_people()
         self.sync_label.clear()
 
     def show_sync_settings(self) -> None:
@@ -812,8 +894,11 @@ class MainWindow(QMainWindow):
         if self.sync_target:
             self._stop_syncing()
         self._set_target(target)
+        if not self.settings.contains("person/name"):
+            self.set_your_name()
         if self.sync_now() is not None:
             self.sync_timer.start()
+            self.presence_timer.start()
             where = "Open from Google Drive…" if target.kind == "gdrive" else "Open Project File… and pick that file"
             QMessageBox.information(
                 self, "Sync & Backup",
@@ -972,6 +1057,9 @@ class MainWindow(QMainWindow):
         self._update_element_actions()
         editor = self.tabs.widget(index)
         self._update_format_bar()
+        self._update_banner()
+        if self.sync_target:
+            self.announce_timer.start()
         if editor is None:
             self.stats_label.clear()
             self.element_label.clear()
@@ -1389,7 +1477,8 @@ class MainWindow(QMainWindow):
         self.tabs.detach()
         # While Qt tears the window down it still emits signals (tab changes,
         # selection changes); don't let them reach half-destroyed Python objects.
-        for timer in (self.save_timer, self.outline_timer, self.bible_timer, self.history_timer, self.sync_timer):
+        for timer in (self.save_timer, self.outline_timer, self.bible_timer, self.history_timer, self.sync_timer,
+                      self.presence_timer, self.announce_timer):
             timer.stop()
         for widget in (self.tabs, self.binder, self.outline, self.search, self.cast, self.side):
             widget.blockSignals(True)

@@ -29,6 +29,7 @@ cp -R "examples/The Lighthouse" /tmp/ && uv run python -m screenwriter "/tmp/The
 | `screenwriter/fountain.py` | Fountain parsing (Qt-free) |
 | `screenwriter/bible.py`, `board.py`, `diff.py` | story bible and boards (Qt-free models), word-level diffs for History |
 | `screenwriter/projecthistory.py` | project history: save points in `.history/` (git objects via dulwich) |
+| `screenwriter/people.py` | your name, colours, presence records (who has the project open, where) |
 | `screenwriter/sync.py`, `merge.py` | cloud-folder sync: `.screenwriter` package files, presence lock; paragraph and card merging, `conflicts.json` |
 | `screenwriter/google_drive.py`, `synctargets.py` | Sign in with Google (OAuth + PKCE) and Drive as a sync target — see [Google Drive setup](google-drive-setup.md) |
 | `screenwriter/export/` | screenplay PDF/FDX and manuscript PDF/Word/Markdown |

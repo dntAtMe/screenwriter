@@ -38,9 +38,13 @@ def machine_name() -> str:
 class SavePoint:
     id: str
     message: str
-    machine: str
+    machine: str  # the computer
     time: datetime
     parents: list[str]
+    person: str = ""  # who wrote it (older save points only know the computer)
+
+    def __post_init__(self):
+        self.person = self.person or self.machine
 
     @property
     def auto(self) -> bool:
@@ -77,6 +81,7 @@ class ProjectHistory:
     def __init__(self, project_path: Path):
         self.project_path = Path(project_path)
         self.machine = machine_name()  # recorded on save points; sync shows where changes came from
+        self.person = ""  # the writer's name, recorded with the computer ("" = just the computer)
         path = self.project_path / HISTORY_DIR
         self.repo = Repo(str(path)) if (path / "objects").is_dir() else Repo.init_bare(str(path), mkdir=True)
 
@@ -119,11 +124,12 @@ class ProjectHistory:
     def commit_files(self, files: dict[str, bytes], message: str, parents: list[bytes],
                      when: float | None = None, machine: str | None = None) -> bytes:
         """Record `files` as a save point with the given parents; moves nothing."""
+        who = self.person if machine is None else machine
         machine = machine or self.machine
         commit = Commit()
         commit.tree = self._build_tree(files)
         commit.parents = parents
-        identity = f"{machine} <{getpass.getuser()}@{machine}>".encode()
+        identity = f"{who or machine} <{getpass.getuser()}@{machine}>".encode()
         commit.author = commit.committer = identity
         commit.author_time = commit.commit_time = int(when if when is not None else time.time())
         offset = int(datetime.now().astimezone().utcoffset().total_seconds())
@@ -152,11 +158,14 @@ class ProjectHistory:
 
     def get(self, commit_id: bytes | str) -> SavePoint:
         commit = self.repo[_id(commit_id)]
-        machine = commit.author.decode("utf-8", "replace").split(" <")[0]
+        author = commit.author.decode("utf-8", "replace")
+        person, _, email = author.partition(" <")
+        machine = email.rstrip(">").partition("@")[2] or person
         return SavePoint(
             id=commit.id.decode(),
             message=commit.message.decode("utf-8", "replace").strip(),
             machine=machine,
+            person=person,
             time=datetime.fromtimestamp(commit.author_time, timezone.utc).astimezone(),
             parents=[p.decode() for p in commit.parents],
         )

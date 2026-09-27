@@ -13,6 +13,7 @@ from screenwriter.google_drive import (
     load_client_config,
 )
 from screenwriter.merge import load_conflicts
+from screenwriter.people import Presence
 from screenwriter.project import PROSE, Project
 from screenwriter.projecthistory import ProjectHistory
 from screenwriter.sync import open_package, sync
@@ -149,13 +150,17 @@ def test_two_computers_sync_through_drive(google, tmp_path):
     [record] = load_conflicts(laptop.project.path)
     assert (record.kept, record.other) == ("Desktop.", "Laptop.")
 
-    # presence
-    laptop.target.lock("Laptop", laptop.project.id)
+    # presence: one app property per open window, short enough for Drive's limit
+    laptop.target.announce(Presence("s-lap", "Kacper", "Laptop", chapter.id, "Chapter 1 — a long title " * 5))
     desktop.target.changed()  # refreshes what we know about the file
-    assert desktop.target.other_machine("Desktop") == "Laptop"
-    laptop.target.unlock("Laptop")
+    [seen] = desktop.target.others("s-desk")
+    assert (seen.person, seen.machine, seen.doc_id) == ("Kacper", "Laptop", chapter.id)
+    assert seen.doc_title.startswith("Chapter 1") and all(
+        len((k + v).encode()) <= 124 for k, v in google.files[desktop.target.file_id]["appProperties"].items())
+    assert laptop.target.others("s-lap") == []
+    laptop.target.leave("s-lap")
     desktop.target.changed()
-    assert desktop.target.other_machine("Desktop") is None
+    assert desktop.target.others("s-desk") == []
 
 
 def test_file_deleted_in_drive_is_recreated(google, tmp_path):

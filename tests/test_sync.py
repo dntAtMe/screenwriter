@@ -6,18 +6,8 @@ import pytest
 from screenwriter.merge import THEIRS, load_conflicts, resolve, save_conflicts
 from screenwriter.project import FOLDER, PROSE, Project
 from screenwriter.projecthistory import ProjectHistory
-from screenwriter.sync import (
-    SyncError,
-    lock_path,
-    open_elsewhere,
-    open_package,
-    package_name,
-    read_manifest,
-    remove_lock,
-    share,
-    sync,
-    write_lock,
-)
+from screenwriter.people import Presence, presence_dir, read_presence, remove_presence, write_presence
+from screenwriter.sync import SyncError, open_package, package_name, read_manifest, share, sync
 
 
 class Machine:
@@ -198,17 +188,24 @@ def test_wrong_project_is_refused(two_computers, tmp_path):
         sync(other.history, other.project.id, "Story", cloud)
 
 
-def test_presence_lock(two_computers):
-    desktop, laptop, cloud, _, _ = two_computers
-    write_lock(cloud, "Laptop", laptop.project.id)
-    assert open_elsewhere(cloud, "Desktop") == "Laptop"
-    assert open_elsewhere(cloud, "Laptop") is None
-    stale = json.loads(lock_path(cloud).read_text())
+def test_presence_per_window(two_computers):
+    _, _, cloud, ch1, _ = two_computers
+    anna = Presence("s-anna", "Anna", "ANNA-PC", ch1, "Chapter 1")
+    ben = Presence("s-ben", "Ben", "BEN-MAC")
+    write_presence(cloud, anna)
+    write_presence(cloud, ben)
+    assert [p.person for p in read_presence(cloud, "s-mine")] == ["Anna", "Ben"]  # three people, no overwriting
+    assert [p.person for p in read_presence(cloud, "s-anna")] == ["Ben"]  # not yourself
+    assert read_presence(cloud, "s-ben")[0].doc_title == "Chapter 1"
+
+    # a window that crashed fades out, and its record is tidied away
+    stale = json.loads((presence_dir(cloud) / "s-ben.json").read_text())
     stale["heartbeat"] = (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()
-    lock_path(cloud).write_text(json.dumps(stale))
-    assert open_elsewhere(cloud, "Desktop") is None
-    remove_lock(cloud, "Laptop")
-    assert not lock_path(cloud).exists()
+    (presence_dir(cloud) / "s-ben.json").write_text(json.dumps(stale))
+    assert [p.person for p in read_presence(cloud, "s-mine")] == ["Anna"]
+    assert not (presence_dir(cloud) / "s-ben.json").exists()
+    remove_presence(cloud, "s-anna")
+    assert read_presence(cloud, "s-mine") == []
 
 
 def test_share_a_copy(two_computers, tmp_path):
