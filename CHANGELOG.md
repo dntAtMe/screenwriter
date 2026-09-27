@@ -6,6 +6,8 @@ All notable changes to Screenwriter are listed here. The format follows
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-09-27
+
 ### Fixed
 - Screenplay PDFs and Final Draft files keep **bold**, *italic* and _underline_ (they were printed plain).
 - `\*` and `\_` in a script print as a plain `*` or `_` instead of a stray backslash.
@@ -77,7 +79,8 @@ The first release.
 - Packages for macOS (`.dmg`), Windows (installer and portable `.zip`) and Linux (`.AppImage`, `.tar.gz`).
 - Released under the MIT License.
 
-[Unreleased]: https://github.com/dntAtMe/screenwriter/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/dntAtMe/screenwriter/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/dntAtMe/screenwriter/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/dntAtMe/screenwriter/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/dntAtMe/screenwriter/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/dntAtMe/screenwriter/releases/tag/v0.1.0
