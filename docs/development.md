@@ -15,6 +15,13 @@ Try things on a **copy** of the sample project — the app autosaves into whatev
 cp -R "examples/The Lighthouse" /tmp/ && uv run python -m screenwriter "/tmp/The Lighthouse"
 ```
 
+To try writing together on one computer, run a second copy with its own settings (name, recent projects,
+sync) — its window title shows the profile:
+
+```bash
+SCREENWRITER_PROFILE=Anna uv run python -m screenwriter
+```
+
 ## Layout
 
 | Path | What |

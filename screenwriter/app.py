@@ -24,7 +24,10 @@ def log(message: str) -> None:
 
 def main() -> None:
     app = QApplication(sys.argv)
-    app.setApplicationName(APP_NAME)
+    # SCREENWRITER_PROFILE=Anna runs a second copy with its own settings (name, recent projects,
+    # sync) — for trying out writing together on one computer.
+    profile = os.environ.get("SCREENWRITER_PROFILE", "").strip()
+    app.setApplicationName(f"{APP_NAME} ({profile})" if profile else APP_NAME)
     app.setOrganizationName(APP_NAME)
     app.setApplicationVersion(__version__)
     if ICON.exists():

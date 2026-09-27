@@ -225,7 +225,7 @@ class MainWindow(QMainWindow):
         self.shortcut_hints.set_enabled(self.hints_action.isChecked())
         self._set_project_actions_enabled(False)
         self.welcome.set_recent(self._recent())
-        self.setWindowTitle(APP_NAME)
+        self.setWindowTitle(self._app_title())
         self.resize(1280, 820)
         if geometry := self.settings.value("geometry"):
             self.restoreGeometry(geometry)
@@ -404,7 +404,7 @@ class MainWindow(QMainWindow):
         self.sync_target = self._make_target(key) if key else None
         self.stack.setCurrentWidget(self.splitter)
         self._set_project_actions_enabled(True)
-        self.setWindowTitle(f"{project.name} — {APP_NAME}")
+        self.setWindowTitle(f"{project.name} — {self._app_title()}")
         self._remember(project.path)
         self._refresh_bible()
         self._update_conflicts_button()
@@ -448,7 +448,7 @@ class MainWindow(QMainWindow):
         self.stack.setCurrentWidget(self.welcome)
         self.welcome.set_recent(self._recent())
         self._set_project_actions_enabled(False)
-        self.setWindowTitle(APP_NAME)
+        self.setWindowTitle(self._app_title())
 
     def _close_project_from_menu(self) -> None:
         self.settings.remove("last_project")  # don't reopen it on next launch
@@ -760,6 +760,12 @@ class MainWindow(QMainWindow):
                 editor.set_text(self.project.read_text(node))
         self._refresh_bible()
         self._refresh_outline()
+
+    @staticmethod
+    def _app_title() -> str:
+        """"Screenwriter", or "Screenwriter (Anna)" for a second copy run with SCREENWRITER_PROFILE."""
+        name = QApplication.applicationName()
+        return name if name.startswith(APP_NAME) else APP_NAME
 
     # --- people ---------------------------------------------------------------------------
 
