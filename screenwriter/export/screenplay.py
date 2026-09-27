@@ -4,12 +4,12 @@ Layout follows the usual US spec: Courier 12pt (10 characters and 6 lines per
 inch), 1.5" left margin, 1" right/top/bottom, page numbers top right from page 2.
 Scene headings are kept with what follows; dialogue split across pages gets
 (MORE) and (CONT'D); long action paragraphs may break between lines.
+**Bold**, *italic* and _underline_ print as such (and are kept in .fdx).
 """
 
 from __future__ import annotations
 
 import re
-import textwrap
 from dataclasses import dataclass, field
 from xml.sax.saxutils import escape, quoteattr
 
@@ -29,14 +29,76 @@ PRINTED = set(COLUMNS)
 DIALOGUE_PARTS = (El.PARENTHETICAL, El.DIALOGUE)
 MORE = "(MORE)"
 
-EMPHASIS_RE = re.compile(r"(\*{1,3}|_)(?=\S)(.+?)(?<=\S)\1")
+EMPHASIS_RE = re.compile(r"(?<!\\)(\*{1,3}|_)(?=\S)(.+?)(?<=[^\s\\])\1")  # \* and \_ are literal
 NOTE_RE = re.compile(r"\[\[.*?\]\]")
 
 
-def clean(text: str, el: El) -> str:
+BOLD, ITALIC, UNDERLINE = 1, 2, 4
+MARK_STYLES = {"*": ITALIC, "**": BOLD, "***": BOLD | ITALIC, "_": UNDERLINE}
+
+
+class Styled(str):
+    """Printable text that remembers each character's style (BOLD | ITALIC | UNDERLINE bits).
+    Slicing, stripping and upper() keep the styles; other str methods return plain str."""
+
+    styles: tuple[int, ...]
+
+    def __new__(cls, text: str, styles=None):
+        obj = super().__new__(cls, text)
+        obj.styles = tuple(styles) if styles is not None and len(styles) == len(text) else (0,) * len(text)
+        return obj
+
+    def __getitem__(self, key):
+        if isinstance(key, slice) and key.step in (None, 1):
+            start, stop, _ = key.indices(len(self))
+            return Styled(str.__getitem__(self, key), self.styles[start:max(start, stop)])
+        return str.__getitem__(self, key)
+
+    def lstrip(self, chars=None):
+        return self[len(self) - len(str.lstrip(self, chars)):]
+
+    def rstrip(self, chars=None):
+        return self[: len(str.rstrip(self, chars))]
+
+    def strip(self, chars=None):
+        return self.lstrip(chars).rstrip(chars)
+
+    def upper(self):
+        return Styled(str.upper(self), self.styles)  # styles dropped if the length changes (ß → SS)
+
+
+def runs(s: str) -> list[tuple[int, str, int]]:
+    """(offset, text, style) for each stretch of one style; plain text is one run."""
+    styles = getattr(s, "styles", None) or (0,) * len(s)
+    out: list[tuple[int, str, int]] = []
+    for i, (ch, style) in enumerate(zip(s, styles)):
+        if out and out[-1][2] == style:
+            out[-1] = (out[-1][0], out[-1][1] + ch, style)
+        else:
+            out.append((i, ch, style))
+    return out
+
+
+def emphasis(text: str) -> Styled:
+    """Take out **bold**, *italic* and _underline_ marks (nested ones too), remembering what they covered."""
+    chars, styles = list(text), [0] * len(text)
+    while m := EMPHASIS_RE.search("".join(chars)):
+        mark, (a, b) = m.group(1), m.span()
+        for i in range(a + len(mark), b - len(mark)):
+            styles[i] |= MARK_STYLES[mark]
+        del chars[b - len(mark):b], styles[b - len(mark):b]
+        del chars[a:a + len(mark)], styles[a:a + len(mark)]
+    i = 0
+    while i < len(chars) - 1:  # \* and \_ print as themselves
+        if chars[i] == "\\" and chars[i + 1] in "*_":
+            del chars[i], styles[i]
+        i += 1
+    return Styled("".join(chars), styles)
+
+
+def clean(text: str, el: El) -> Styled:
     """Printable text for one line: no notes, emphasis marks or forcing marks."""
-    s = NOTE_RE.sub("", text).strip()
-    s = EMPHASIS_RE.sub(r"\2", s).replace("\\*", "*").replace("\\_", "_")
+    s = emphasis(NOTE_RE.sub("", text).strip())
     if el == El.CENTERED:
         s = s.lstrip(">").rstrip("<").strip()
     elif s[:1] in ".!@>" and not s.startswith("..") and el in (El.SCENE, El.ACTION, El.CHARACTER, El.TRANSITION):
@@ -77,11 +139,35 @@ def blocks(text: str) -> tuple[dict[str, str], list[Block]]:
     return title_page(lines), out
 
 
+def wrap_line(s: str, width: int) -> list[str]:
+    """Break a line into pieces of at most `width` characters with textwrap's algorithm
+    (textwrap.wrap(break_on_hyphens=False)), but by slicing `s`, so a Styled line stays styled."""
+    chunks = [list(m.span()) for m in re.finditer(r"\s+|\S+", s)][::-1]  # words and spaces, next one last
+    is_space = lambda c: not str.strip(s[c[0]:c[1]])
+    out = []
+    while chunks:
+        line, used = [], 0
+        if out and is_space(chunks[-1]):
+            chunks.pop()  # no spaces at the start of a line after the first
+        while chunks and used + chunks[-1][1] - chunks[-1][0] <= width:
+            line.append(chunks.pop())
+            used += line[-1][1] - line[-1][0]
+        if chunks and chunks[-1][1] - chunks[-1][0] > width:  # a word longer than a line fills this one
+            cut = chunks[-1][0] + (width - used if width >= 1 else 1)
+            line.append([chunks[-1][0], cut])
+            chunks[-1][0] = cut
+        if line and is_space(line[-1]):
+            line.pop()
+        if line:
+            out.append(s[line[0][0]:line[-1][1]])
+    return out
+
+
 def wrap(block: Block) -> list[tuple[El, str]]:
     printed = []
     for el, s in block.lines:
         _, width = COLUMNS[el]
-        printed += [(el, line) for line in textwrap.wrap(s, width, break_on_hyphens=False) or [""]]
+        printed += [(el, line) for line in wrap_line(s, width) or [s[:0]]]
     return printed
 
 
@@ -165,9 +251,21 @@ def write_pdf(text: str, path: str, paper: str = "Letter", fallback_title: str =
     ascent = painter.fontMetrics().ascent()
     left, top, cw, lh = 108.0, 72.0, 7.2, 12.0
     page_width = size.sizePoints().width()
+    fonts: dict[int, QFont] = {}
+
+    def font_for(style: int) -> QFont:
+        if style not in fonts:
+            fonts[style] = styled = QFont(font)
+            styled.setBold(bool(style & BOLD))
+            styled.setItalic(bool(style & ITALIC))
+            styled.setUnderline(bool(style & UNDERLINE))
+        return fonts[style]
 
     def draw(x: float, y: float, s: str) -> None:
-        painter.drawText(QPointF(x, y + ascent), s)
+        # each run at its own column, so a bold or italic face can't shift the monospaced layout
+        for offset, text, style in runs(s):
+            painter.setFont(font_for(style))
+            painter.drawText(QPointF(x + offset * cw, y + ascent), text)
 
     if fields:
         _draw_title_page(fields, draw, left, cw, lh, page_width, height_pt)
@@ -228,6 +326,15 @@ FDX_TYPES = {
 }
 
 
+def fdx_text(s: str) -> str:
+    """<Text> elements for a line, one per stretch of one style (Style="Bold+Underline")."""
+    parts = []
+    for _, text, style in runs(s):
+        names = "+".join(name for flag, name in ((BOLD, "Bold"), (ITALIC, "Italic"), (UNDERLINE, "Underline")) if style & flag)
+        parts.append(f"<Text{' Style=' + quoteattr(names) if names else ''}>{escape(text)}</Text>")
+    return "".join(parts) or "<Text></Text>"
+
+
 def to_fdx(text: str) -> str:
     fields, script = blocks(text)
     out = ['<?xml version="1.0" encoding="UTF-8" standalone="no" ?>',
@@ -235,7 +342,7 @@ def to_fdx(text: str) -> str:
     for block in script:
         for el, s in block.lines:
             align = ' Alignment="Center"' if el == El.CENTERED else ""
-            out.append(f"    <Paragraph Type={quoteattr(FDX_TYPES[el])}{align}><Text>{escape(s)}</Text></Paragraph>")
+            out.append(f"    <Paragraph Type={quoteattr(FDX_TYPES[el])}{align}>{fdx_text(s)}</Paragraph>")
     out.append("  </Content>")
     if fields:
         out += ["  <TitlePage>", "    <Content>"]

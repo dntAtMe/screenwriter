@@ -1,3 +1,4 @@
+import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -180,3 +181,50 @@ def test_pdf_pages_have_content(qapp, tmp_path, node_id, expected):
     for s in expected:
         assert squeeze(s) in text
     assert "[[" not in text  # notes are never printed
+
+
+def test_wrap_line_matches_textwrap():
+    import random
+    import textwrap
+
+    from screenwriter.export.screenplay import wrap_line
+
+    rng = random.Random(7)
+    words = ["a", "keeper", "lighthouse", "x" * 45, "—", "on", "the", "rocks,", "(beat)", "supercalifragilistic"]
+    for _ in range(500):
+        s = " ".join(rng.choice(words) for _ in range(rng.randint(0, 30)))
+        s = " " * rng.randint(0, 2) + s + " " * rng.randint(0, 2)
+        for width in (25, 35, 38, 60):
+            assert wrap_line(s, width) == textwrap.wrap(s, width, break_on_hyphens=False), (s, width)
+
+
+def test_emphasis_is_kept_as_styles():
+    from screenwriter.export.screenplay import BOLD, ITALIC, UNDERLINE, runs
+
+    s = clean(r"She **really** runs _fast_, *very* ***very*** _**far**_ \*ok\*.", El.ACTION)
+    assert s == "She really runs fast, very very far *ok*."
+    assert [(t, st) for _, t, st in runs(s) if st] == [
+        ("really", BOLD), ("fast", UNDERLINE), ("very", ITALIC), ("very", BOLD | ITALIC), ("far", BOLD | UNDERLINE),
+    ]
+    # styles survive the forcing mark, capitals and wrapping
+    heading = clean(".**flashback**", El.SCENE)
+    assert heading == "FLASHBACK" and set(heading.styles) == {BOLD}
+    _, pages = paginate("INT. A - DAY\n\n" + "plain " * 12 + "**" + ("loud " * 12).strip() + "**", 54)
+    lines = [line[1] for line in pages[0] if line and line[0] == El.ACTION]
+    assert len(lines) > 1 and all(len(line.styles) == len(line) for line in lines)
+    assert lines[-1].styles[-1] == BOLD and lines[0].styles[0] == 0
+
+
+def test_fdx_keeps_styles():
+    root = ET.fromstring(screenplay.to_fdx("INT. A - DAY\n\nShe **really** _runs_."))
+    texts = [(t.text, t.get("Style")) for t in root.findall("./Content/Paragraph")[1].findall("Text")]
+    assert texts == [("She ", None), ("really", "Bold"), (" ", None), ("runs", "Underline"), (".", None)]
+
+
+def test_pdf_prints_bold_and_italic(qapp, tmp_path):
+    out = tmp_path / "styled.pdf"
+    screenplay.write_pdf("INT. A - DAY\n\nPlain **bold** *italic* _under_.", str(out))
+    data = out.read_bytes()
+    fonts = set(re.findall(rb"/BaseFont\s*/([^\s/>]+)", data))
+    assert len(fonts) >= 3, fonts  # regular, bold and italic faces
+    assert any(b"Bold" in f for f in fonts) and any(b"Italic" in f or b"Oblique" in f for f in fonts), fonts

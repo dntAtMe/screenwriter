@@ -295,7 +295,8 @@ Select what to export in the binder and choose **File → Export…** (`Ctrl+E`)
 
 - **Screenplay PDF**: Courier 12pt with industry margins and indents, a title page from the `Title:` lines,
   page numbers from page 2, scene headings never stranded at the bottom of a page, and `(MORE)` / `(CONT'D)`
-  when dialogue continues on the next page. Letter or A4.
+  when dialogue continues on the next page. `**bold**`, `*italic*` and `_underline_` are printed as such (and kept
+  in Final Draft files); write `\*` or `\_` for a plain asterisk or underscore. Letter or A4.
 - **Manuscript** (PDF and Word): each `# Heading` starts a new page; Word files use standard manuscript format
   (Times 12pt, double spaced, first-line indents). A chapter without its own heading gets its title as one.
 - `[[Notes]]` are never exported, and neither are a script's `# sections` and `= synopses`.

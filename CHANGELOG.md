@@ -6,6 +6,10 @@ All notable changes to Screenwriter are listed here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- Screenplay PDFs and Final Draft files keep **bold**, *italic* and _underline_ (they were printed plain).
+- `\*` and `\_` in a script print as a plain `*` or `_` instead of a stray backslash.
+
 ## [0.3.0] - 2026-09-27
 
 ### Added
