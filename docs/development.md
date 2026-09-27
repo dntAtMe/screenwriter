@@ -44,8 +44,8 @@ Every editor offers the same small interface to the main window (`text`, `set_te
 ```bash
 uv sync --group build
 uv run pyinstaller packaging/screenwriter.spec --noconfirm   # → dist/Screenwriter(.app)
-packaging/macos/make_dmg.sh 0.2.0 arm64 out                   # macOS disk image
-uv run bash packaging/linux/make_packages.sh 0.2.0 out        # Linux .tar.gz + .AppImage
+packaging/macos/make_dmg.sh 0.3.0 arm64 out                   # macOS disk image
+uv run bash packaging/linux/make_packages.sh 0.3.0 out        # Linux .tar.gz + .AppImage
 ```
 
 Windows installers are built with [Inno Setup](https://jrsoftware.org/isinfo.php) from

@@ -6,6 +6,8 @@ All notable changes to Screenwriter are listed here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-27
+
 ### Added
 - **Go to Document** (press `Shift` twice, or `Ctrl+P`): type part of a name to jump to any document, folder
   corkboard or board card; open tabs come first. `Shift+Enter` opens it on the other side of a split view.
@@ -71,6 +73,7 @@ The first release.
 - Packages for macOS (`.dmg`), Windows (installer and portable `.zip`) and Linux (`.AppImage`, `.tar.gz`).
 - Released under the MIT License.
 
-[Unreleased]: https://github.com/dntAtMe/screenwriter/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/dntAtMe/screenwriter/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/dntAtMe/screenwriter/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/dntAtMe/screenwriter/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/dntAtMe/screenwriter/releases/tag/v0.1.0
