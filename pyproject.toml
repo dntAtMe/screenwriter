@@ -1,6 +1,6 @@
 [project]
 name = "screenwriter"
-version = "0.3.1"
+version = "0.4.0"
 description = "A tunable writing app for screenplays, books, ideas and mind maps (Qt/PySide6)"
 readme = "README.md"
 license = "MIT"

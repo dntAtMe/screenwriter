@@ -6,6 +6,8 @@ All notable changes to Screenwriter are listed here. The format follows
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-27
+
 ### Added
 - **Writing together** through a shared folder (a network drive, or a shared Dropbox/OneDrive/Drive folder):
   set your name once (**File → Your Name…**); the status bar shows who else has the project open, the binder marks
@@ -102,7 +104,8 @@ The first release.
 - Packages for macOS (`.dmg`), Windows (installer and portable `.zip`) and Linux (`.AppImage`, `.tar.gz`).
 - Released under the MIT License.
 
-[Unreleased]: https://github.com/dntAtMe/screenwriter/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/dntAtMe/screenwriter/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/dntAtMe/screenwriter/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/dntAtMe/screenwriter/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/dntAtMe/screenwriter/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/dntAtMe/screenwriter/compare/v0.1.0...v0.2.0

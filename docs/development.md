@@ -57,8 +57,8 @@ It uses a fresh copy of the sample and its own settings, so your projects and wi
 ```bash
 uv sync --group build
 uv run pyinstaller packaging/screenwriter.spec --noconfirm   # → dist/Screenwriter(.app)
-packaging/macos/make_dmg.sh 0.3.1 arm64 out                   # macOS disk image
-uv run bash packaging/linux/make_packages.sh 0.3.1 out        # Linux .tar.gz + .AppImage
+packaging/macos/make_dmg.sh 0.4.0 arm64 out                   # macOS disk image
+uv run bash packaging/linux/make_packages.sh 0.4.0 out        # Linux .tar.gz + .AppImage
 ```
 
 Windows installers are built with [Inno Setup](https://jrsoftware.org/isinfo.php) from
