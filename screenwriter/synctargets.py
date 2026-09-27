@@ -8,7 +8,9 @@ keeps the presence records of the people who have the project open (see people.p
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+import os
+import time
+from contextlib import contextmanager, nullcontext
 from pathlib import Path
 
 from . import people
@@ -56,6 +58,55 @@ class FolderTarget:
             return self.package.stat().st_mtime
         except OSError:
             return None
+
+    # --- one writer at a time -------------------------------------------------------------
+
+    LOCK_WAIT = 5.0  # seconds to wait for someone else's sync to finish
+    LOCK_STALE = 60.0  # a lock this old was left by a crash: take it over
+
+    @contextmanager
+    def exclusive(self, session: str):
+        """Hold "<name>.screenwriter.writing" while syncing, so two people saving to a shared
+        drive at the same moment take turns instead of overwriting each other's upload."""
+        lock = self.package.with_name(self.package.name + ".writing")
+        deadline = time.monotonic() + self.LOCK_WAIT
+        mine = False
+        while True:
+            try:
+                fd = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+                os.write(fd, session.encode())
+                os.close(fd)
+                mine = True
+                break
+            except FileExistsError:
+                try:
+                    if time.time() - lock.stat().st_mtime > self.LOCK_STALE:
+                        lock.unlink(missing_ok=True)
+                        continue
+                except OSError:
+                    continue
+                if time.monotonic() > deadline:
+                    raise TargetError("Someone else is saving to the shared project right now — trying again shortly.")
+                time.sleep(0.2)
+            except OSError:
+                break  # a folder we can't lock in (read-only?): go ahead as before
+        try:
+            yield
+        finally:
+            if mine:
+                lock.unlink(missing_ok=True)
+
+    def strays(self) -> list[Path]:
+        return cloud.stray_copies(self.package)
+
+    def retire(self, copy: Path) -> None:
+        """Keep a folded-in copy as a backup, under a name nothing will pick up again."""
+        try:
+            copy.replace(copy.with_name(copy.name + ".merged"))
+        except OSError:
+            pass
+
+    # --- presence ----------------------------------------------------------------------------
 
     def announce(self, presence: people.Presence) -> None:
         people.write_presence(self.package, presence)
@@ -135,6 +186,15 @@ class DriveTarget:
     def changed(self) -> bool:
         meta = self._meta()
         return meta is not None and meta.properties.get("head") != self.head
+
+    def exclusive(self, session: str):
+        return nullcontext()  # Drive keeps its own revisions; sync compares heads
+
+    def strays(self) -> list[Path]:
+        return []
+
+    def retire(self, copy: Path) -> None:
+        pass
 
     # Presence lives in the package file's appProperties, one short key per open window
     # ("p_<session>"). Drive allows 124 bytes for a key and its value together.

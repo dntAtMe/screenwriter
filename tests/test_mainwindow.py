@@ -477,3 +477,32 @@ def test_arrived_names_everyone(window, tmp_path):
         window.history.save_point()
     assert arrived(window.history, before) == ["Ben", "Cleo"]
     assert arrived(window.history, window.history.head()) == []
+
+
+def test_sync_comes_sooner_when_others_are_here(window, tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+
+    from screenwriter.sync import package_name
+    from screenwriter.synctargets import FolderTarget
+
+    monkeypatch.setattr(QMessageBox, "information", staticmethod(lambda *a, **k: None))
+    anna = window
+    package = tmp_path / "Network Drive" / package_name(anna.project.name)
+    package.parent.mkdir()
+    anna._set_target(FolderTarget(package))
+    anna.sync_now()
+    anna.open_document("ch01")
+
+    # alone: typing doesn't hurry sync
+    anna.editors["ch01"].replace_all("Alone.")
+    assert not anna.quick_sync_timer.isActive() and anna.sync_timer.interval() == 60 * 1000
+
+    # Ben arrives: sync follows typing, and his changes are looked for every 15 s
+    people.write_presence(package, people.Presence("s-ben", "Ben", "BEN-PC", "ch02", "Chapter 2"))
+    anna._check_people()
+    assert anna.sync_timer.interval() == 15 * 1000
+    anna.editors["ch01"].replace_all("Together.")
+    assert anna.quick_sync_timer.isActive()
+    anna.quick_sync_timer.timeout.emit()
+    from screenwriter.sync import read_manifest
+    assert read_manifest(package)["head"] == anna.history.head().decode()

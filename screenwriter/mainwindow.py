@@ -208,6 +208,10 @@ class MainWindow(QMainWindow):
         self.presence_timer.timeout.connect(self._check_people)
         self.announce_timer = QTimer(self, singleShot=True, interval=1500)  # after switching tabs
         self.announce_timer.timeout.connect(self._check_people)
+        # While others are in the project too: sync shortly after typing stops, and look for
+        # their changes more often, so everyone's copy stays close and clashes stay rare.
+        self.quick_sync_timer = QTimer(self, singleShot=True, interval=10 * 1000)
+        self.quick_sync_timer.timeout.connect(lambda: self.sync_now(quiet=True))
 
         # Autosave: shortly after typing stops, and always on tab switch / close.
         self.save_timer = QTimer(self, singleShot=True, interval=1500)
@@ -425,6 +429,7 @@ class MainWindow(QMainWindow):
             except (DriveError, TargetError, OSError):
                 pass
         self.presence_timer.stop()
+        self.quick_sync_timer.stop()
         self._clear_people()
         self.sync_target = None
         self.sync_label.clear()
@@ -499,6 +504,7 @@ class MainWindow(QMainWindow):
         editor.node_id = node_id
         editor.set_text(self.project.read_text(node))
         editor.textChanged.connect(self.save_timer.start)
+        editor.textChanged.connect(self._typed)
         editor.statsChanged.connect(lambda e=editor: self._update_stats(e))
         editor.textChanged.connect(lambda e=editor: self._schedule_outline(e))
         editor.cursorPositionChanged.connect(lambda e=editor: self._on_cursor_moved(e))
@@ -690,9 +696,20 @@ class MainWindow(QMainWindow):
         before = self.history.head()
         QApplication.setOverrideCursor(Qt.CursorShape.BusyCursor)
         try:
-            package = target.prepare(self.project)
-            result = cloud.sync(self.history, self.project.id, self.project.name, package)
-            target.finish(result, self.project)
+            with target.exclusive(self.session):
+                package = target.prepare(self.project)
+                absorbed = []
+                for copy in target.strays():  # a cloud app's "conflicted copy" of the project file
+                    if (extra := cloud.absorb(self.history, self.project.id, copy)) is not None:
+                        absorbed.append(extra)
+                        target.retire(copy)
+                result = cloud.sync(self.history, self.project.id, self.project.name, package)
+                target.finish(result, self.project)
+            for extra in absorbed:
+                result.changed = sorted(set(result.changed) | set(extra.changed))
+                result.conflicts += extra.conflicts
+                if extra.changed and result.status in ("uploaded", "up-to-date"):
+                    result.status, result.machine = "merged", extra.machine
         except (cloud.SyncError, DriveError, TargetError, OSError) as e:
             self._sync_failed(e, quiet)
             return None
@@ -778,6 +795,10 @@ class MainWindow(QMainWindow):
             return
         self._show_people()
 
+    def _typed(self) -> None:
+        if self.sync_target and self.others:
+            self.quick_sync_timer.start()
+
     def _clear_people(self) -> None:
         self.others = []
         self._show_people()
@@ -794,6 +815,9 @@ class MainWindow(QMainWindow):
                 where.setdefault(p.doc_id, []).append((p.person, people.colour_for(p.person)))
         self.binder.set_presence(where)
         self._update_banner()
+        interval = (15 if self.others else 60) * 1000
+        if self.sync_timer.interval() != interval:
+            self.sync_timer.setInterval(interval)
 
     def _update_banner(self) -> None:
         """Say so when someone else has the document in front of you open too."""
@@ -1528,7 +1552,7 @@ class MainWindow(QMainWindow):
         # While Qt tears the window down it still emits signals (tab changes,
         # selection changes); don't let them reach half-destroyed Python objects.
         for timer in (self.save_timer, self.outline_timer, self.bible_timer, self.history_timer, self.sync_timer,
-                      self.presence_timer, self.announce_timer):
+                      self.presence_timer, self.announce_timer, self.quick_sync_timer):
             timer.stop()
         for widget in (self.tabs, self.binder, self.outline, self.search, self.cast, self.side):
             widget.blockSignals(True)

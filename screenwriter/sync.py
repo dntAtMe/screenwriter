@@ -21,6 +21,7 @@ The same file is a complete backup, and a way to share a project (see share()).
 
 from __future__ import annotations
 
+import glob
 import json
 import os
 import re
@@ -341,6 +342,18 @@ def sync(history: ProjectHistory, project_id: str, name: str, package: Path) -> 
             write_package(history, project_id, name, package)
             return SyncResult("uploaded")
         return SyncResult("up-to-date")
+    result = bring_in(history, remote)
+    if result.status == "merged":
+        write_package(history, project_id, name, package)
+    return result
+
+
+def bring_in(history: ProjectHistory, remote: bytes) -> SyncResult:
+    """Make `remote` (already fetched) part of our history: take it if only they changed,
+    otherwise merge. Updates the project files; doesn't write any package."""
+    local = history.head()
+    if remote == local or _is_ancestor(history.repo, remote, local):
+        return SyncResult("up-to-date")
     their_machine = history.get(remote).person
     if _is_ancestor(history.repo, local, remote):  # only they changed: take theirs
         changed = [c.path for c in history.changes(remote, against=local)]
@@ -357,9 +370,31 @@ def sync(history: ProjectHistory, project_id: str, name: str, package: Path) -> 
     commit = history.commit_files(merged, message, [local, remote])
     history.set_head(commit)
     history.restore_files(commit)
-    write_package(history, project_id, name, package)
     changed = sorted(p for p in set(ours) | set(merged) if ours.get(p) != merged.get(p))
     return SyncResult("merged", changed, conflicts, their_machine)
+
+
+def absorb(history: ProjectHistory, project_id: str, copy: Path) -> SyncResult | None:
+    """Bring in a stray copy of the project file — one a cloud app saved as "(conflicted copy)"
+    or "(1)" when two computers wrote at once. None if it isn't this project's."""
+    try:
+        if read_manifest(copy).get("project_id") != project_id:
+            return None
+        remote = fetch(history, copy)
+    except (SyncError, OSError, zipfile.BadZipFile, KeyError):
+        return None
+    return bring_in(history, remote) if remote else SyncResult("up-to-date")
+
+
+def stray_copies(package: Path) -> list[Path]:
+    """Other .screenwriter files next to the package whose names suggest a copy of it
+    ("Story (1).screenwriter", "Story (Anna's conflicted copy).screenwriter", "Story-LAPTOP.screenwriter")."""
+    stem = package.name.removesuffix(PACKAGE_EXT)
+    try:
+        return sorted(p for p in package.parent.glob(f"{glob.escape(stem)}*{PACKAGE_EXT}")
+                      if p != package and p.is_file())
+    except OSError:
+        return []
 
 
 # --- cloud folders on this computer --------------------------------------------------------------------

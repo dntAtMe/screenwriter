@@ -280,8 +280,14 @@ with **Sync & Backup…**, the others with **File → Open Project File…**).
   with the ones since you last looked in bold and counted on the tab. Double-click a document to open it, or
   **Show Changes…** to see exactly what changed in History.
 
-Everyone sees the others within about half a minute on a network drive; through a cloud service it takes as long
-as that service takes to sync.
+While someone else has the project open, Screenwriter syncs about ten seconds after you stop typing and looks for
+their changes every 15 seconds, so everyone's copy stays close and clashes stay rare. On a network drive you'll
+see each other's work within half a minute or so; through a cloud service it also takes as long as that service
+takes to sync. Two people saving at the same moment simply take turns.
+
+If a cloud app ever saves a second copy of the project file — Dropbox's “(conflicted copy)”, Google Drive's
+“(1)”, OneDrive's “-COMPUTERNAME” — Screenwriter merges it back in on the next sync and renames it to
+`….screenwriter.merged`, which you can delete.
 
 ### Sync with Google Drive (sign in with Google)
 

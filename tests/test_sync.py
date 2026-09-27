@@ -215,3 +215,51 @@ def test_share_a_copy(two_computers, tmp_path):
     opened = Project.open(open_package(copy, tmp_path / "ana"))
     assert opened.read_text(opened.find(ch1)) == "One."
     assert ProjectHistory(opened.path).log()  # history travels with it
+
+
+def test_one_writer_at_a_time(two_computers, monkeypatch):
+    from screenwriter.synctargets import FolderTarget, TargetError
+
+    _, _, cloud, _, _ = two_computers
+    a, b = FolderTarget(cloud), FolderTarget(cloud)
+    monkeypatch.setattr(FolderTarget, "LOCK_WAIT", 0.3)
+    with a.exclusive("s-a"):
+        with pytest.raises(TargetError):
+            with b.exclusive("s-b"):
+                pass
+    with b.exclusive("s-b"):  # free again once a is done
+        pass
+    lock = cloud.with_name(cloud.name + ".writing")
+    lock.write_text("crashed")
+    old = lock.stat().st_mtime - 3600
+    import os
+    os.utime(lock, (old, old))
+    with b.exclusive("s-b"):  # a lock left by a crash is taken over
+        pass
+    assert not lock.exists()
+
+
+def test_conflicted_copy_is_folded_in(two_computers):
+    from screenwriter.sync import absorb, stray_copies
+    from screenwriter.synctargets import FolderTarget
+
+    desktop, laptop, cloud, ch1, ch2 = two_computers
+    # the laptop's cloud app couldn't replace the file and saved its version beside it
+    laptop.write(ch2, "Written on the laptop.")
+    laptop.history.save_point()
+    copy = cloud.with_name("Story (Laptop's conflicted copy).screenwriter")
+    share(laptop.history, laptop.project.id, laptop.project.name, copy)
+    other_project = cloud.with_name("Story 2.screenwriter")
+    other_project.write_bytes(b"not even a zip")
+    assert stray_copies(cloud) == sorted([copy, other_project])
+
+    desktop.write(ch1, "Written on the desktop.")
+    desktop.history.save_point()
+    assert absorb(desktop.history, desktop.project.id, other_project) is None  # not ours: left alone
+    result = absorb(desktop.history, desktop.project.id, copy)
+    desktop.reload()
+    assert result.status == "merged" and desktop.read(ch2) == "Written on the laptop."
+    assert desktop.read(ch1) == "Written on the desktop."
+    FolderTarget(cloud).retire(copy)
+    assert not copy.exists() and copy.with_name(copy.name + ".merged").exists()
+    assert stray_copies(cloud) == [other_project]

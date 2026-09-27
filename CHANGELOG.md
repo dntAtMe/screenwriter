@@ -14,6 +14,9 @@ All notable changes to Screenwriter are listed here. The format follows
 - **Updates** tab in the side panel: recent changes by other people (and your other computers) — who, when,
   which documents, words added or removed — with what's new since you last looked in bold. Documents someone
   else changed are bold in the binder until you open them, and a notice says who changed what when it arrives.
+- **Quicker sync while writing together**: with someone else in the project, sync runs about ten seconds after
+  you stop typing and checks for their changes every 15 seconds. Two people saving to a shared drive at once take
+  turns, and cloud apps' “conflicted copy” files of the project are merged back in and set aside.
 
 ### Changed
 - **Sync merges paragraph by paragraph**: when two people (or computers) edit the same document, changes to
