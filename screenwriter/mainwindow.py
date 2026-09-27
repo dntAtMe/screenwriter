@@ -1,9 +1,10 @@
 import html
+import sys
 from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import QSettings, QStandardPaths, Qt, QTimer, QUrl
-from PySide6.QtGui import QAction, QDesktopServices, QKeySequence
+from PySide6.QtGui import QAction, QActionGroup, QDesktopServices, QKeySequence
 from PySide6.QtWidgets import (
     QApplication,
     QFileDialog,
@@ -32,6 +33,9 @@ from . import merge, people
 from .formatbar import FormatBar
 from .liveedit import LiveEditing
 from .panes import TabArea
+from . import fonts
+from .fontdialog import FontDialog
+from . import theme
 from . import comments as notes
 from .commentspanel import CommentsPanel
 from . import spelling
@@ -197,6 +201,10 @@ class MainWindow(QMainWindow):
         self.people_label = QLabel()
         self.statusBar().addPermanentWidget(self.people_label)
         self.statusBar().addPermanentWidget(self.sync_label)
+        self.save_label = QLabel()
+        self.save_label.setStyleSheet("color: gray;")
+        self.save_label.setToolTip("Everything is saved automatically as you write; Ctrl+S saves right away")
+        self.statusBar().addPermanentWidget(self.save_label)
         self.stats_label = QLabel()
         self.element_label = QLabel()
         self.element_label.setStyleSheet("color: gray;")
@@ -232,6 +240,7 @@ class MainWindow(QMainWindow):
         self.save_timer.timeout.connect(self.save_all)
 
         self.spell = spelling.SpellService(self)
+        self._guessed_languages = spelling.default_languages()
         self._build_menus()
         self._update_format_bar()
         self.shortcut_hints = ShortcutHints(self)
@@ -271,7 +280,7 @@ class MainWindow(QMainWindow):
         self._action(file, "Your Name…", self.set_your_name)
         file.addSeparator()
         self.project_actions = [
-            self._action(file, "Save", self.save_all, QKeySequence.StandardKey.Save),
+            self._action(file, "Save", self.save_now, QKeySequence.StandardKey.Save),
             self._action(file, "Export…", self.export_current, "Ctrl+E"),
             self._action(file, "Save Version…", self.save_version, "Ctrl+Alt+S"),
             self._action(file, "History…", self.show_history, "Ctrl+Alt+H"),
@@ -368,6 +377,16 @@ class MainWindow(QMainWindow):
         self.hints_action.setCheckable(True)
         self.hints_action.setChecked(self.settings.value("shortcut_hints", True, type=bool))
         self._action(view, "Full Screen", self.toggle_fullscreen, "Ctrl+Meta+F")
+        self._action(view, "Fonts…", self.choose_fonts)
+        appearance = view.addMenu("Appearance")
+        group = QActionGroup(self)
+        self.appearance_actions = {}
+        for key, label in theme.MODES.items():
+            action = self._action(appearance, label, lambda k=key: self.set_appearance(k))
+            action.setCheckable(True)
+            action.setChecked(theme.mode() == key)
+            group.addAction(action)
+            self.appearance_actions[key] = action
         view.addSeparator()
         self.project_actions += [
             self._action(view, "Zoom In", lambda: self._zoom(1), QKeySequence.StandardKey.ZoomIn),
@@ -445,6 +464,8 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(f"{project.name} — {self._app_title()}")
         self._remember(project.path)
         self._refresh_bible()
+        self._guessed_languages = spelling.default_languages(
+            "".join(project.read_text(n) for n in walk(project.root) if n.is_document))
         self._apply_spelling()
         self._load_comments()
         self._update_conflicts_button()
@@ -474,6 +495,7 @@ class MainWindow(QMainWindow):
         self._clear_people()
         self.sync_target = None
         self.sync_label.clear()
+        self.save_label.clear()
         self.conflicts_button.hide()
         self.comments = []
         self.comments_panel.set_comments([])
@@ -556,6 +578,7 @@ class MainWindow(QMainWindow):
         editor.node_id = node_id
         editor.set_text(self.project.read_text(node))
         editor.textChanged.connect(self.save_timer.start)
+        editor.textChanged.connect(self._editing)
         editor.textChanged.connect(self._typed)
         editor.statsChanged.connect(lambda e=editor: self._update_stats(e))
         editor.textChanged.connect(lambda e=editor: self._schedule_outline(e))
@@ -568,6 +591,19 @@ class MainWindow(QMainWindow):
         self.tabs.setCurrentIndex(index)
         editor.setFocus()
 
+    def _editing(self) -> None:
+        if self.save_timer.isActive():
+            self.save_label.setText("Editing…")
+
+    def save_now(self) -> None:
+        """Ctrl+S: save at once, and say so clearly."""
+        if self.project is None:
+            return
+        self.save_all()
+        self.statusBar().showMessage("✓ Saved — all your documents are on disk", 4000)
+        self.save_label.setStyleSheet("color: #4fa35a; font-weight: 600;")
+        QTimer.singleShot(1500, lambda: self.save_label.setStyleSheet("color: gray;"))
+
     def save_all(self) -> None:
         if self.project is None:
             return
@@ -578,6 +614,8 @@ class MainWindow(QMainWindow):
                 if node:
                     self.project.write_text(node, editor.text())
                 editor.mark_saved()
+        self._guess_languages(e.text() for e in self.editors.values() if hasattr(e, "text"))
+        self.save_label.setText(f"✓ Saved {datetime.now():%H:%M}")
 
     # --- history ------------------------------------------------------------------
 
@@ -988,7 +1026,16 @@ class MainWindow(QMainWindow):
 
     def _languages(self) -> list[str]:
         return (self.project.spelling if self.project and self.project.spelling is not None
-                else spelling.default_languages())
+                else self._guessed_languages)
+
+    def _guess_languages(self, texts) -> None:
+        """No languages chosen for the project: go by what's written in it."""
+        if self.project is None or self.project.spelling is not None or "pl_PL" in self._guessed_languages:
+            return
+        guess = spelling.default_languages("".join(texts))
+        if guess != self._guessed_languages:
+            self._guessed_languages = guess
+            self._apply_spelling()
 
     def _apply_spelling(self) -> None:
         """The project's languages, on or off as the menu says."""
@@ -1849,6 +1896,32 @@ class MainWindow(QMainWindow):
 
     def toggle_fullscreen(self) -> None:
         self.showNormal() if self.isFullScreen() else self.showFullScreen()
+
+    def set_appearance(self, key: str) -> None:
+        theme.set_mode(key)
+        for window in QApplication.topLevelWidgets():
+            if isinstance(window, MainWindow):
+                for k, action in window.appearance_actions.items():
+                    action.setChecked(k == key)
+
+    def choose_fonts(self) -> None:
+        dialog = FontDialog(self)
+        if not dialog.exec():
+            return
+        was_smooth = fonts.smooth()
+        dialog.save()
+        for window in QApplication.topLevelWidgets():  # every window of this app
+            if isinstance(window, MainWindow):
+                window.apply_fonts()
+        if sys.platform == "win32" and fonts.smooth() != was_smooth:
+            QMessageBox.information(self, "Fonts", "Restart Screenwriter to see the letters "
+                                    f"{'smoothed' if fonts.smooth() else 'sharp'} everywhere.")
+
+    def apply_fonts(self) -> None:
+        for editor in self.editors.values():
+            for e in (editor, getattr(editor, "notes", None)):
+                if hasattr(e, "apply_font"):
+                    e.apply_font()
 
     def _zoom(self, steps: int) -> None:
         if editor := self.tabs.currentWidget():

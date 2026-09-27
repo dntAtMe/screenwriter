@@ -6,7 +6,7 @@ from PySide6.QtCore import QSettings, QTimer
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 
-from . import __version__
+from . import __version__, fonts, theme
 from .mainwindow import APP_NAME, MainWindow
 from .project import Project
 
@@ -23,13 +23,21 @@ def log(message: str) -> None:
 
 
 def main() -> None:
-    app = QApplication(sys.argv)
     # SCREENWRITER_PROFILE=Anna runs a second copy with its own settings (name, recent projects,
     # sync) — for trying out writing together on one computer.
     profile = os.environ.get("SCREENWRITER_PROFILE", "").strip()
-    app.setApplicationName(f"{APP_NAME} ({profile})" if profile else APP_NAME)
+    name = f"{APP_NAME} ({profile})" if profile else APP_NAME
+    QApplication.setOrganizationName(APP_NAME)
+    QApplication.setApplicationName(name)
+    if sys.platform == "win32" and "QT_QPA_PLATFORM" not in os.environ and fonts.smooth():
+        # Windows' own text rendering (ClearType) is crisp and pixel-snapped; FreeType draws
+        # the softer, grayscale letters of View → Fonts → Smooth letters. Chosen at startup.
+        os.environ["QT_QPA_PLATFORM"] = "windows:fontengine=freetype"
+    app = QApplication(sys.argv)
+    app.setApplicationName(name)
     app.setOrganizationName(APP_NAME)
     app.setApplicationVersion(__version__)
+    theme.apply()
     if ICON.exists():
         app.setWindowIcon(QIcon(str(ICON)))
 

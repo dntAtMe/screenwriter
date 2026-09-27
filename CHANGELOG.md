@@ -6,6 +6,22 @@ All notable changes to Screenwriter are listed here. The format follows
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-09-27
+
+### Added
+- **Fonts**: View → Fonts… picks the script, prose and screenplay-PDF fonts from eleven bundled
+  typewriter-style fonts (all with Polish letters), with a preview. iA Writer Duo is the new default for writing;
+  screenplay PDFs stay in Courier Prime unless you pick another font of the same width.
+- **Dark mode**: View → Appearance → Follow System / Light / Dark, switched without a restart.
+- **Save status**: the status bar shows *Editing…* while you type and *✓ Saved 14:32* once your work is on disk;
+  `Ctrl+S` confirms with a message.
+- **Smooth letters** (on by default): softer, grayscale-antialiased text without pixel snapping. On Windows it uses
+  FreeType rendering, so changing it takes effect after a restart.
+
+### Fixed
+- Polish words were marked as misspelled in projects that hadn't chosen spelling languages on a computer set to
+  English. Such projects now check Polish too as soon as they contain Polish letters.
+
 ## [0.6.0] - 2026-09-27
 
 ### Added
@@ -130,7 +146,8 @@ The first release.
 - Packages for macOS (`.dmg`), Windows (installer and portable `.zip`) and Linux (`.AppImage`, `.tar.gz`).
 - Released under the MIT License.
 
-[Unreleased]: https://github.com/dntAtMe/screenwriter/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/dntAtMe/screenwriter/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/dntAtMe/screenwriter/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/dntAtMe/screenwriter/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/dntAtMe/screenwriter/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/dntAtMe/screenwriter/compare/v0.3.1...v0.4.0

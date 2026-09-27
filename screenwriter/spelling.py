@@ -28,10 +28,14 @@ WORD_RE = re.compile(r"[^\W\d_]+(?:['’][^\W\d_]+)*")
 SKIP_RE = re.compile(r"https?://\S+|\S+@\S+\.\S+")  # links and e-mail addresses
 
 
-def default_languages() -> list[str]:
-    """What this computer's language suggests: Polish writers usually write English too."""
+POLISH_RE = re.compile("[ąćęłńśźżĄĆĘŁŃŚŹŻ]")
+
+
+def default_languages(text: str = "") -> list[str]:
+    """For a project that hasn't chosen: Polish if its writing (or this computer) is Polish —
+    Polish writers usually write English too — else this computer's English."""
     name = QLocale.system().name()
-    if name.startswith("pl"):
+    if name.startswith("pl") or POLISH_RE.search(text):
         return ["pl_PL", "en_US"]
     return ["en_GB"] if name in ("en_GB", "en_IE", "en_AU", "en_NZ") else ["en_US"]
 

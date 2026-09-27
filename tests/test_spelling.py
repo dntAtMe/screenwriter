@@ -105,6 +105,31 @@ def test_squiggles_and_suggestions(service, qapp):
     dispose(script)
 
 
+def test_polish_writing_brings_the_polish_dictionary(qapp, sample_project, monkeypatch):
+    from PySide6.QtCore import QLocale
+
+    from screenwriter.mainwindow import MainWindow
+
+    monkeypatch.setattr(QLocale, "system", staticmethod(lambda: QLocale("en_US")))  # an English Windows
+    assert spelling.default_languages("The boat came.") == ["en_US"]
+    assert spelling.default_languages("Uczy się języka.") == ["pl_PL", "en_US"]
+
+    QSettings().clear()
+    w = MainWindow()
+    w.open_project(sample_project)  # (all English)
+    assert w.project.spelling is None and w.spell.languages == ["en_US"]
+    w.open_document("ch01")
+    w.editors["ch01"].textCursor().insertText("Uczy się języka. ")
+    w.save_all()
+    assert w.spell.languages == ["pl_PL", "en_US"]  # what's written says Polish
+    dispose(w)
+
+    w = MainWindow()
+    w.open_project(sample_project)
+    assert w.spell.languages == ["pl_PL", "en_US"]
+    dispose(w)
+
+
 def test_project_languages_and_dictionary(qapp, sample_project):
     from screenwriter.mainwindow import MainWindow
 

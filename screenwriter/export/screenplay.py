@@ -233,7 +233,7 @@ def write_pdf(text: str, path: str, paper: str = "Letter", fallback_title: str =
     from PySide6.QtCore import QMarginsF, QPointF
     from PySide6.QtGui import QFont, QPageLayout, QPageSize, QPainter, QPdfWriter
 
-    from ..editors.common import first_available_font
+    from .. import fonts
 
     size = QPageSize(QPageSize.PageSizeId.A4 if paper == "A4" else QPageSize.PageSizeId.Letter)
     height_pt = size.sizePoints().height()
@@ -247,7 +247,7 @@ def write_pdf(text: str, path: str, paper: str = "Letter", fallback_title: str =
     writer.setCreator("Screenwriter")
 
     painter = QPainter(writer)
-    font = QFont(first_available_font("Courier Prime", "Courier New", "Courier"))
+    font = QFont(fonts.family("script_pdf"))  # always 10 characters per inch (see fonts.choices)
     font.setPointSizeF(12)
     painter.setFont(font)
     ascent = painter.fontMetrics().ascent()

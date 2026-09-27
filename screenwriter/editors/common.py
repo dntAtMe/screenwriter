@@ -1,5 +1,6 @@
 import re
 
+from PySide6.QtCore import QEvent, QObject
 from PySide6.QtGui import QFontDatabase, QPalette, QTextCursor
 from PySide6.QtWidgets import QAbstractScrollArea
 
@@ -76,12 +77,25 @@ def center_column(editor: QAbstractScrollArea, column_px: float, top: int = 32) 
     editor.setViewportMargins(side, top, side, 0)
 
 
+class _PageMargins(QObject):
+    """Keeps an editor's margins the colour of its page when the app's palette changes (light/dark)."""
+
+    def eventFilter(self, obj, e):
+        if e.type() in (QEvent.Type.ApplicationPaletteChange, QEvent.Type.PaletteChange):
+            pal = obj.palette()
+            if pal.color(QPalette.ColorRole.Window) != pal.color(QPalette.ColorRole.Base):
+                pal.setColor(QPalette.ColorRole.Window, pal.color(QPalette.ColorRole.Base))
+                obj.setPalette(pal)
+        return False
+
+
 def paint_margins_as_page(editor: QAbstractScrollArea) -> None:
     """Viewport margins are drawn with the Window colour; make them match the text area."""
     pal = editor.palette()
     pal.setColor(QPalette.ColorRole.Window, pal.color(QPalette.ColorRole.Base))
     editor.setPalette(pal)
     editor.setAutoFillBackground(True)
+    editor.installEventFilter(_PageMargins(editor))
 
 
 class TextDocumentAPI:

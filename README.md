@@ -72,4 +72,6 @@ See [Development](docs/development.md) for tests, packaging and how releases are
 Screenwriter is free and open source under the [MIT License](LICENSE). The app bundles Qt and PySide6,
 which are available under the LGPLv3. The spelling dictionaries come from
 [LibreOffice](https://github.com/LibreOffice/dictionaries) (Polish: sjp.pl, under GPL / LGPL / MPL / Apache /
-CC SA; English: SCOWL, under a BSD-style licence); their notices are inside each dictionary's zip.
+CC SA; English: SCOWL, under a BSD-style licence); their notices are inside each dictionary's zip. The bundled fonts are under the SIL Open Font License (Courier Prime,
+iA Writer, IBM Plex Mono, Cutive Mono, Sometype Mono, Anonymous Pro, Xanh Mono), the Apache License (Special Elite)
+and the GUST Font License (TeX Gyre Cursor); the licences are in `screenwriter/resources/fonts/licenses`.

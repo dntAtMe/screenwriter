@@ -12,6 +12,7 @@ from PySide6.QtGui import QColor, QFont, QSyntaxHighlighter, QTextCharFormat, QT
 from PySide6.QtWidgets import QCompleter, QFrame, QPlainTextEdit, QToolTip
 
 from ..bible import CHARACTER, BibleIndex
+from .. import fonts
 from ..fountain import OutlineItem
 from ..marks import MARK_RE
 from .biblemenu import add_bible_menu, add_mark_menu
@@ -19,7 +20,6 @@ from .spellmenu import add_comment_action, add_spelling_menu
 from .common import (
     TextDocumentAPI,
     center_column,
-    first_available_font,
     paint_margins_as_page,
     highlight_comments,
     underline_misspelled,
@@ -115,8 +115,7 @@ class ProseEditor(TextDocumentAPI, QPlainTextEdit):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setFrameShape(QFrame.Shape.NoFrame)
-        font = QFont(first_available_font("Iowan Old Style", "Charter", "Georgia", "Serif"))
-        font.setPointSizeF(17)
+        font = fonts.font("prose", 17)
         self.setFont(font)
         self.highlighter = MarkdownHighlighter(self.document(), font)
         self.highlighter.comment_spans = self.comment_spans
@@ -282,6 +281,13 @@ class ProseEditor(TextDocumentAPI, QPlainTextEdit):
     def zoom(self, steps: int) -> None:
         font = self.font()
         font.setPointSizeF(max(9, font.pointSizeF() + steps))
+        self._set_base_font(font)
+
+    def apply_font(self) -> None:
+        """Use the chosen prose font (View → Fonts), at the current size."""
+        self._set_base_font(fonts.font("prose", self.font().pointSizeF()))
+
+    def _set_base_font(self, font) -> None:
         self.setFont(font)
         self.highlighter.base_font = font
         self.highlighter.rehighlight()

@@ -42,7 +42,8 @@ The **binder** on the left lists the project's contents. Each item is one of:
   deleted permanently from there (this can't be undone).
 
 Everything **saves automatically** a moment after you stop typing, and when you switch tabs or quit.
-**File → Save** (`Ctrl+S`) saves right away if you like the habit.
+**File → Save** (`Ctrl+S`) saves right away if you like the habit. The status bar (bottom right) shows *Editing…* while
+there are changes to save and *✓ Saved* with the time once they're on disk.
 
 ## Writing prose
 
@@ -69,8 +70,9 @@ Misspelled words get a red squiggle, in chapters, notes, scripts and Story Bible
 suggestions (they appear after a moment), **Add to Project Dictionary**, or **Ignore** (until you close the app).
 
 - **Languages** are chosen per project in **Edit → Spelling**: *Polski*, *English (US)*, *English (UK)* — tick
-  more than one if you write in more than one; a word is right if any of them knows it. A new project starts with
-  your computer's language (Polish and English on a Polish computer).
+  more than one if you write in more than one; a word is right if any of them knows it. Until you choose, a project
+  goes by what's written in it: Polish and English once it has Polish letters (or on a Polish computer), else
+  your computer's English.
 - The **project dictionary** (**Edit → Spelling → Project Dictionary…**) is shared with everyone the project syncs
   with. Story Bible names — *Xardas*, *Skerry Rock* — are always accepted.
 - Short words in capitals (INT, EXT, V.O.) and the title page of a script aren't checked. **Edit → Spelling →
@@ -406,6 +408,13 @@ Select what to export in the binder and choose **File → Export…** (`Ctrl+E`)
 - **Focus mode** (`Ctrl+Shift+D`) hides everything but the page. Press it again to come back.
 - **Full screen**: **View → Full Screen**.
 - **Zoom** (`Ctrl++` / `Ctrl+-`) changes the text size of the current document.
+- **Appearance**: **View → Appearance** — *Follow System*, *Light* or *Dark* (warm dark greys, easy on the eyes
+  at night). It changes straight away, in every window.
+- **Fonts**: **View → Fonts…** picks the font for scripts, for prose and notes, and for screenplay PDFs, with a
+  preview. Eleven typewriter-style fonts come with the app, all with Polish letters: iA Writer Duo (the default),
+  Courier Prime, TeX Gyre Cursor, Cutive Mono, Special Elite, Sometype Mono and more. A screenplay PDF keeps the
+  standard page layout (10 characters per inch), so only fonts whose letters are all one width are offered for it.
+  **Smooth letters** (on by default) draws softer, less pixel-sharp text; on Windows, restart after changing it.
 - Hide the binder with `Ctrl+\` and the side panel with `Ctrl+Alt+\`.
 
 ## Keyboard shortcuts

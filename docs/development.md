@@ -39,6 +39,7 @@ SCREENWRITER_PROFILE=Anna uv run python -m screenwriter
 | `screenwriter/live.py`, `liveedit.py` | live editing: each open document shared as a CRDT ([pycrdt](https://github.com/y-crdt/pycrdt), a Yjs port) through per-window state files on the shared folder |
 | `screenwriter/updates.py` | the Updates side panel: recent changes by others, read from history |
 | `screenwriter/comments.py`, `commentspanel.py` | comments: anchored by their words (no markup in documents), `comments.json`, merged per comment and reply |
+| `screenwriter/fonts.py`, `fontdialog.py` | bundled fonts (`resources/fonts`), the font settings and View → Fonts; `exact` fonts keep Courier's 0.6 em grid for the screenplay PDF |
 | `screenwriter/spelling.py` | spell checking (spylls + the Hunspell dictionaries in `resources/dictionaries`), on a background thread |
 | `screenwriter/marks.py` | marked mentions: `{the hooded figure|Xardas}` and `[[HOODED FIGURE is Xardas]]` |
 | `screenwriter/people.py` | your name, colours, presence records (who has the project open, where) |
@@ -75,8 +76,8 @@ It uses a fresh copy of the sample and its own settings, so your projects and wi
 ```bash
 uv sync --group build
 uv run pyinstaller packaging/screenwriter.spec --noconfirm   # → dist/Screenwriter(.app)
-packaging/macos/make_dmg.sh 0.6.0 arm64 out                   # macOS disk image
-uv run bash packaging/linux/make_packages.sh 0.6.0 out        # Linux .tar.gz + .AppImage
+packaging/macos/make_dmg.sh 0.7.0 arm64 out                   # macOS disk image
+uv run bash packaging/linux/make_packages.sh 0.7.0 out        # Linux .tar.gz + .AppImage
 ```
 
 Windows installers are built with [Inno Setup](https://jrsoftware.org/isinfo.php) from

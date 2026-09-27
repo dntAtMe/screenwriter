@@ -39,7 +39,7 @@ from PySide6.QtWidgets import QCompleter, QFrame, QTextEdit
 
 import re
 
-from .. import fountain
+from .. import fonts, fountain
 from ..fountain import AFTER_BREAK, EL_NAMES, IN_DIALOGUE, SCENE_PREFIXES, SCENE_RE, El, classify
 from ..bible import BibleIndex
 from ..marks import MARK_RE
@@ -49,7 +49,6 @@ from .history import TextHistory
 from .common import (
     TextDocumentAPI,
     center_column,
-    first_available_font,
     paint_margins_as_page,
     highlight_comments,
     underline_misspelled,
@@ -171,9 +170,7 @@ class ScreenplayEditor(TextDocumentAPI, QTextEdit):
         super().__init__(parent)
         self.setFrameShape(QFrame.Shape.NoFrame)
         self.setAcceptRichText(False)
-        font = QFont(first_available_font("Courier Prime", "Courier New", "Courier"))
-        font.setPointSizeF(14)
-        font.setStyleHint(QFont.StyleHint.Monospace)
+        font = fonts.font("script", 14)
         self.setFont(font)
         self.document().setDefaultFont(font)
         paint_margins_as_page(self)
@@ -283,7 +280,8 @@ class ScreenplayEditor(TextDocumentAPI, QTextEdit):
         self._refresh_blocks(n - 1, n)
 
     def _char_width(self) -> float:
-        return QFontMetricsF(self.document().defaultFont()).horizontalAdvance("M")
+        # "n", not "M": in a duospaced font (iA Writer Duo) m and w are wider than the rest
+        return QFontMetricsF(self.document().defaultFont()).horizontalAdvance("n")
 
     def _apply_layout(self) -> None:
         """Indent every block according to its element."""
@@ -321,6 +319,13 @@ class ScreenplayEditor(TextDocumentAPI, QTextEdit):
     def zoom(self, steps: int) -> None:
         font = self.document().defaultFont()
         font.setPointSizeF(max(9, font.pointSizeF() + steps))
+        self._set_base_font(font)
+
+    def apply_font(self) -> None:
+        """Use the chosen script font (View → Fonts), at the current size."""
+        self._set_base_font(fonts.font("script", self.document().defaultFont().pointSizeF()))
+
+    def _set_base_font(self, font) -> None:
         self.setFont(font)
         self.document().setDefaultFont(font)
         self._apply_layout()
