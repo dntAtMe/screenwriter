@@ -33,11 +33,22 @@ cp -R "examples/The Lighthouse" /tmp/ && uv run python -m screenwriter "/tmp/The
 | `screenwriter/google_drive.py`, `synctargets.py` | Sign in with Google (OAuth + PKCE) and Drive as a sync target — see [Google Drive setup](google-drive-setup.md) |
 | `screenwriter/export/` | screenplay PDF/FDX and manuscript PDF/Word/Markdown |
 | `screenwriter/resources/icon.png` | app icon — regenerate with `uv run python packaging/make_icon.py` |
-| `packaging/` | PyInstaller spec and per-platform installer scripts |
+| `packaging/` | PyInstaller spec, per-platform installer scripts, `screenshots.py` for `docs/images` |
 | `.github/workflows/` | CI (tests on push) and Release (builds and publishes) |
 
 Every editor offers the same small interface to the main window (`text`, `set_text`, `is_modified`,
 `mark_saved`, `stats`, `outline`, `search_text`, `reveal`, `jump_to_line`, …) — see `editors/common.py`.
+
+## Screenshots
+
+The images in `docs/images` (README, user guide, website) are made from the sample project:
+
+```bash
+uv run python packaging/screenshots.py            # all of them
+uv run python packaging/screenshots.py board      # one
+```
+
+It uses a fresh copy of the sample and its own settings, so your projects and window layout aren't touched.
 
 ## Building the app locally
 

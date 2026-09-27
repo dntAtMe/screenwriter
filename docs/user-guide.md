@@ -318,6 +318,9 @@ Select what to export in the binder and choose **File → Export…** (`Ctrl+E`)
   (its current tab is underlined). A document is shown on one side at a time.
   - **Move Tab to Other Side** (`Ctrl+Alt+M`) and **Focus Other Side** (`F6`) move between them.
   - **Unsplit** (`Ctrl+Alt+W`) brings every tab back together; closing the last tab on one side does the same.
+
+  ![A script and its lead character's Story Bible entry side by side](images/split.png)
+
 - **Focus mode** (`Ctrl+Shift+D`) hides everything but the page. Press it again to come back.
 - **Full screen**: **View → Full Screen**.
 - **Zoom** (`Ctrl++` / `Ctrl+-`) changes the text size of the current document.
