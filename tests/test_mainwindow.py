@@ -506,3 +506,65 @@ def test_sync_comes_sooner_when_others_are_here(window, tmp_path, monkeypatch):
     anna.quick_sync_timer.timeout.emit()
     from screenwriter.sync import read_manifest
     assert read_manifest(package)["head"] == anna.history.head().decode()
+
+
+def test_live_editing(window, tmp_path, monkeypatch):
+    from PySide6.QtGui import QTextCursor
+    from PySide6.QtWidgets import QMessageBox
+
+    from screenwriter.sync import package_name
+    from screenwriter.synctargets import FolderTarget
+
+    monkeypatch.setattr(QMessageBox, "information", staticmethod(lambda *a, **k: None))
+    anna = window
+    anna.person_name = lambda: "Anna"
+    package = tmp_path / "Network Drive" / package_name(anna.project.name)
+    package.parent.mkdir()
+    anna._set_target(FolderTarget(package))
+    anna.sync_now()
+    anna.settings.remove(f"sync_local/{anna.project.id}")
+    ben = MainWindow()
+    ben.person_name = lambda: "Ben"
+    ben.open_project_file(str(package), str(tmp_path / "ben"), keep_synced=True)
+    for w in (anna, ben):
+        w.open_document("ch01")
+        w.live.timer.stop()  # ticks by hand below
+    ben._check_people(), anna._check_people(), ben._check_people()
+    a, b = anna.editors["ch01"], ben.editors["ch01"]
+    original = a.text()
+    paragraphs = original.split("\n")
+    first = next(i for i, p in enumerate(paragraphs) if p.startswith("Mara"))
+    second = next(i for i, p in enumerate(paragraphs) if p.startswith("The supply boat"))
+
+    # Anna works in the first paragraph, Ben adds to the second
+    cursor = a.textCursor()
+    cursor.setPosition(len("\n".join(paragraphs[:first + 1])))
+    a.setTextCursor(cursor)
+    a.textCursor().insertText(" Anna was here.")
+    anna_cursor = a.textCursor().position()
+    b.replace_all(b.text().replace("brought a stranger.", "brought a stranger. Ben was here."))
+
+    ben.live.tick()  # Ben publishes
+    anna.live.tick()  # Anna takes it in
+    assert "Ben was here." in a.text() and "Anna was here." in a.text()
+    assert a.textCursor().position() == anna_cursor  # her cursor didn't jump
+    assert len(a.extraSelections()) == 1  # Ben's line is tinted…
+    labels = [c for c in a.viewport().children() if hasattr(c, "text") and c.text() == "Ben"]
+    assert labels  # …with his name
+
+    anna.live.tick()  # Anna publishes the merged text
+    ben.live.tick()  # Ben takes in Anna's sentence
+    assert a.text() == b.text()
+
+    # Ben's state on disk is now older than what Anna types next: it mustn't undo her new words
+    a.textCursor().insertText(" And more.")
+    anna.live._take_in(anna.live._reader.read(anna.session))
+    assert "And more." in a.text()
+
+    # with live editing off, nothing flows
+    anna.live.enabled = False
+    b.replace_all(b.text() + "\n\nOnly Ben.")
+    ben.live.tick()
+    anna.live.tick()
+    assert "Only Ben." not in a.text() and a.extraSelections() == []
+    dispose(ben)

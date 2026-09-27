@@ -30,6 +30,7 @@ from .conflictdialog import ConflictDialog
 from .exportdialog import run_export
 from . import merge, people
 from .formatbar import FormatBar
+from .liveedit import LiveEditing
 from .panes import TabArea
 from .updates import UpdatesPanel, arrived, recent_updates
 from .quickopen import DoubleShift, QuickOpen, Target
@@ -221,6 +222,8 @@ class MainWindow(QMainWindow):
         self._update_format_bar()
         self.shortcut_hints = ShortcutHints(self)
         self.double_shift = DoubleShift(self)
+        self.live = LiveEditing(self)
+        self.live.enabled = self.live_action.isChecked()
         self.double_shift.triggered.connect(self.quick_open)
         self.shortcut_hints.set_enabled(self.hints_action.isChecked())
         self._set_project_actions_enabled(False)
@@ -323,6 +326,9 @@ class MainWindow(QMainWindow):
         ]
         self.project_actions += tab_actions + split
         view.addSeparator()
+        self.live_action = self._action(view, "Live Editing (see others type)", self._toggle_live)
+        self.live_action.setCheckable(True)
+        self.live_action.setChecked(self.settings.value("live_editing", True, type=bool))
         self.toolbar_action = self._action(view, "Formatting Toolbar", self._toggle_format_bar)
         self.toolbar_action.setCheckable(True)
         self.toolbar_action.setChecked(self.settings.value("format_bar", True, type=bool))
@@ -423,6 +429,7 @@ class MainWindow(QMainWindow):
         self.history_timer.stop()
         self.sync_timer.stop()
         if self.sync_target:
+            self.live.leave()
             self.sync_now(quiet=True, reload=False)
             try:
                 self.sync_target.leave(self.session)
@@ -756,7 +763,10 @@ class MainWindow(QMainWindow):
         for path in changed:
             node = self.project.find(self._node_id_for(path))
             editor = self.editors.get(node.id) if node else None
-            if editor is not None and not isinstance(editor, CorkboardView):
+            if isinstance(editor, (ProseEditor, ScreenplayEditor)):
+                editor.apply_remote_text(self.project.read_text(node))  # keeps your cursor and scroll
+                editor.mark_saved()
+            elif editor is not None and not isinstance(editor, CorkboardView):
                 editor.set_text(self.project.read_text(node))
         self._refresh_bible()
         self._refresh_outline()
@@ -836,9 +846,13 @@ class MainWindow(QMainWindow):
         me = self.person_name()
         names = " and ".join(f'<b style="color:{people.colour_for(p.person)}">{html.escape(p.label(me))}</b>' for p in here)
         verb = "has" if len(here) == 1 else "have"
-        self.presence_banner.setText(
-            f"{names} {verb} this open too. Edits to different paragraphs merge when you sync; "
-            "if you both change the same paragraph, you'll choose which version to keep.")
+        if self.live.active() and isinstance(editor, (ProseEditor, ScreenplayEditor)):
+            how = ("You'll see their typing as it happens; if you both change the same words at once, "
+                   "you'll choose which version to keep.")
+        else:
+            how = ("Edits to different paragraphs merge when you sync; "
+                   "if you both change the same words, you'll choose which version to keep.")
+        self.presence_banner.setText(f"{names} {verb} this open too. {how}")
         self.presence_banner.show()
 
     # --- updates ----------------------------------------------------------------------------
@@ -920,6 +934,7 @@ class MainWindow(QMainWindow):
 
     def _stop_syncing(self) -> None:
         if self.sync_target:
+            self.live.leave()
             try:
                 self.sync_target.leave(self.session)
             except (DriveError, TargetError, OSError):
@@ -1225,6 +1240,13 @@ class MainWindow(QMainWindow):
         self.format_bar.set_editor(target)
         focused = self.tabs.tab_bars_hidden()
         self.format_bar.setVisible(target is not None and self.toolbar_action.isChecked() and not focused)
+
+    def _toggle_live(self) -> None:
+        self.settings.setValue("live_editing", self.live_action.isChecked())
+        self.live.enabled = self.live_action.isChecked()
+        if not self.live.enabled:
+            self.live.leave()
+        self._update_banner()
 
     def _toggle_shortcut_hints(self) -> None:
         self.settings.setValue("shortcut_hints", self.hints_action.isChecked())
@@ -1558,7 +1580,7 @@ class MainWindow(QMainWindow):
         # While Qt tears the window down it still emits signals (tab changes,
         # selection changes); don't let them reach half-destroyed Python objects.
         for timer in (self.save_timer, self.outline_timer, self.bible_timer, self.history_timer, self.sync_timer,
-                      self.presence_timer, self.announce_timer, self.quick_sync_timer):
+                      self.presence_timer, self.announce_timer, self.quick_sync_timer, self.live.timer):
             timer.stop()
         for widget in (self.tabs, self.binder, self.outline, self.search, self.cast, self.side):
             widget.blockSignals(True)

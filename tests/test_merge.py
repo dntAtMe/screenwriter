@@ -99,3 +99,16 @@ def test_conflict_lists_merge_as_sets():
     ours = dump_conflicts([a, c])  # we resolved b, found c
     theirs = dump_conflicts([b])  # they resolved a
     assert {r.id for r in merge_conflict_lists(base, ours, theirs)} == {"c"}
+
+
+def test_same_paragraph_different_sentences_combine():
+    base = "Mara winds the clock. The boat is late. She waits."
+    ours = "Mara winds the brass clock. The boat is late. She waits."
+    theirs = "Mara winds the clock. The boat is late. She waits by the window."
+    assert merge_text(base, ours, theirs) == ("Mara winds the brass clock. The boat is late. She waits by the window.", [])
+
+
+def test_same_words_still_clash():
+    base = "The boat is late."
+    text, [clash] = merge_text(base, "The boat is early.", "The boat is gone.")
+    assert text == "The boat is early." and clash.other == "The boat is gone."

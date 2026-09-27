@@ -13,6 +13,7 @@ Qt-free, like sync.py.
 from __future__ import annotations
 
 import json
+import re
 import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
@@ -63,36 +64,66 @@ def _line_map(base: list[str], side: list[str]) -> dict[int, int]:
     return out
 
 
-def merge_text(base: str, ours: str, theirs: str) -> tuple[str, list[Clash]]:
-    """diff3-style merge by lines. Changes in different places combine; where both
-    sides changed the same lines differently, ours is kept and a Clash is reported."""
-    if ours == theirs or theirs == base:
-        return ours, []
-    if ours == base:
-        return theirs, []
-    b, o, t = base.split("\n"), ours.split("\n"), theirs.split("\n")
+def _merge_seq(b: list[str], o: list[str], t: list[str]):
+    """diff3 over two sequences: yields ("same", items) for stretches that merge, and
+    ("clash", base, ours, theirs) where both sides changed the same stretch differently."""
     to_o, to_t = _line_map(b, o), _line_map(b, t)
-    out: list[str] = []
-    clashes: list[Clash] = []
     ib = io = it = 0
     while ib < len(b) or io < len(o) or it < len(t):
         if ib < len(b) and to_o.get(ib) == io and to_t.get(ib) == it:  # unchanged on both sides
-            out.append(b[ib])
+            yield "same", [b[ib]]
             ib, io, it = ib + 1, io + 1, it + 1
             continue
-        # the next line both sides still share ends this changed stretch
+        # the next item both sides still share ends this changed stretch
         j = next((j for j in range(ib, len(b)) if to_o.get(j, -1) >= io and to_t.get(j, -1) >= it), len(b))
         eo = to_o[j] if j < len(b) else len(o)
         et = to_t[j] if j < len(b) else len(t)
         chunk_b, chunk_o, chunk_t = b[ib:j], o[io:eo], t[it:et]
         if chunk_o == chunk_b or chunk_o == chunk_t:
-            out += chunk_t
+            yield "same", chunk_t
         elif chunk_t == chunk_b:
-            out += chunk_o
+            yield "same", chunk_o
         else:
-            clashes.append(Clash("\n".join(chunk_o), "\n".join(chunk_t), "\n".join(chunk_b), out[-1] if out else ""))
-            out += chunk_o
+            yield "clash", chunk_b, chunk_o, chunk_t
         ib, io, it = j, eo, et
+
+
+TOKEN_RE = re.compile(r"\s+|\w+|[^\w\s]")
+
+
+def _merge_words(base: str, ours: str, theirs: str) -> str | None:
+    """The same paragraph changed on both sides: merge it word by word, so edits to
+    different sentences (or words) combine. None if they touch the same words."""
+    tokens = lambda s: TOKEN_RE.findall(s)
+    out = []
+    for part in _merge_seq(tokens(base), tokens(ours), tokens(theirs)):
+        if part[0] == "clash":
+            return None
+        out += part[1]
+    return "".join(out)
+
+
+def merge_text(base: str, ours: str, theirs: str) -> tuple[str, list[Clash]]:
+    """diff3-style merge by lines (a prose paragraph is a line), then by words inside a
+    paragraph both sides changed. Changes in different places combine; where both changed
+    the same words differently, ours is kept and a Clash is reported."""
+    if ours == theirs or theirs == base:
+        return ours, []
+    if ours == base:
+        return theirs, []
+    out: list[str] = []
+    clashes: list[Clash] = []
+    for part in _merge_seq(base.split("\n"), ours.split("\n"), theirs.split("\n")):
+        if part[0] == "same":
+            out += part[1]
+            continue
+        chunk_b, chunk_o, chunk_t = ("\n".join(c) for c in part[1:])
+        words = _merge_words(chunk_b, chunk_o, chunk_t)
+        if words is not None:
+            out += words.split("\n")
+        else:
+            clashes.append(Clash(chunk_o, chunk_t, chunk_b, out[-1] if out else ""))
+            out += part[2]
     return "\n".join(out), clashes
 
 

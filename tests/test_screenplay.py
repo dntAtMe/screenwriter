@@ -154,3 +154,17 @@ def test_load_leaves_no_undo_history(editor):
     assert editor.is_modified()
     editor.mark_saved()
     assert not editor.is_modified()
+
+
+def test_remote_text_keeps_cursor_and_layout(editor):
+    type_scene(editor)
+    cursor = editor.textCursor()
+    cursor.setPosition(len("EXT. SEA - DAY\n\nINT. KITCHEN - DAY\n\nMara"))
+    editor.setTextCursor(cursor)
+    new = editor.text().replace("Some things never change.", "Some things never, ever change.")
+    assert editor.apply_remote_text(new)
+    assert editor.text() == new
+    assert editor.textCursor().position() == len("EXT. SEA - DAY\n\nINT. KITCHEN - DAY\n\nMara")
+    assert elements(editor)[-3:] == [El.CHARACTER, El.PARENTHETICAL, El.DIALOGUE]
+    assert not editor.can_undo()  # their words aren't ours to undo
+    assert not editor.apply_remote_text(new)

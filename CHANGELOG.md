@@ -6,6 +6,14 @@ All notable changes to Screenwriter are listed here. The format follows
 
 ## [Unreleased]
 
+### Added
+- **Live editing** on shared folders and network drives: see what others type in the same chapter or script
+  within a second or two, with their paragraph tinted and named in their colour (**View → Live Editing**).
+
+### Changed
+- Merging goes down to words: two people changing different sentences of the same paragraph no longer conflict.
+- A sync that brings in changes to an open document keeps your cursor and scroll position.
+
 ## [0.4.0] - 2026-09-27
 
 ### Added

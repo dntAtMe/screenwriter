@@ -274,6 +274,13 @@ with **Sync & Backup…**, the others with **File → Open Project File…**).
 - **The same document**: when someone else has the document in front of you open too, a note above the page says
   so. You can keep writing — different paragraphs merge, and if you both change the same paragraph you'll choose
   which version to keep (see above).
+- **Live editing**: on a shared folder or network drive, when others have the same chapter or script open you
+  see their typing within a second or two, and the paragraph each of them is in is tinted in their colour with
+  their name. Different paragraphs, sentences and words combine as you both type; if you both change the very same
+  words at once, each keeps their own until the next sync, and then you choose (see *Review Conflicts* above).
+  Their changes can't be undone from your window, so **Undo** starts afresh when they arrive. Turn it off with
+  **View → Live Editing**. (It isn't available for Google Drive signed in directly, nor yet for boards and
+  Story Bible entries, which still update when you sync.)
 - **What's new**: when a sync brings in other people's changes, the status bar says who changed what, and those
   documents turn **bold** in the binder until you open them. The **Updates** tab in the side panel lists recent
   changes by everyone else (and by you on your other computers) — who, when, which documents and how many words —

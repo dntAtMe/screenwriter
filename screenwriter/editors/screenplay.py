@@ -323,6 +323,17 @@ class ScreenplayEditor(TextDocumentAPI, QTextEdit):
         self.history.end(0)
         self._full_refresh()
 
+    def apply_remote_text(self, text: str) -> bool:
+        self._replaying = True  # not a step of our own to undo
+        try:
+            changed = super().apply_remote_text(text)
+        finally:
+            self._replaying = False
+        if changed:
+            self.history.reset(self.toPlainText())
+            self._full_refresh()
+        return changed
+
     def apply_edit(self, change) -> None:
         self.history.begin(self.textCursor().position())
         super().apply_edit(change)

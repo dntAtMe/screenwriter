@@ -36,6 +36,7 @@ SCREENWRITER_PROFILE=Anna uv run python -m screenwriter
 | `screenwriter/fountain.py` | Fountain parsing (Qt-free) |
 | `screenwriter/bible.py`, `board.py`, `diff.py` | story bible and boards (Qt-free models), word-level diffs for History |
 | `screenwriter/projecthistory.py` | project history: save points in `.history/` (git objects via dulwich) |
+| `screenwriter/live.py`, `liveedit.py` | live editing: per-window state files on the shared folder, merged in every second |
 | `screenwriter/updates.py` | the Updates side panel: recent changes by others, read from history |
 | `screenwriter/people.py` | your name, colours, presence records (who has the project open, where) |
 | `screenwriter/sync.py`, `merge.py` | cloud-folder sync: `.screenwriter` package files, presence lock; paragraph and card merging, `conflicts.json` |

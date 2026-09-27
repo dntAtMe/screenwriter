@@ -53,6 +53,27 @@ class TextDocumentAPI:
         cursor.insertText(text)
         cursor.endEditBlock()
 
+    def apply_remote_text(self, text: str) -> bool:
+        """Take in text changed elsewhere (live editing, sync) by replacing only the part that
+        differs, so your cursor and scroll position stay put. Returns whether anything changed.
+        Their changes can't be undone here, so undo starts afresh."""
+        old = self.toPlainText()
+        if text == old:
+            return False
+        start = 0
+        limit = min(len(old), len(text))
+        while start < limit and old[start] == text[start]:
+            start += 1
+        end = 0
+        while end < limit - start and old[len(old) - 1 - end] == text[len(text) - 1 - end]:
+            end += 1
+        cursor = QTextCursor(self.document())
+        cursor.setPosition(start)
+        cursor.setPosition(len(old) - end, QTextCursor.MoveMode.KeepAnchor)
+        cursor.insertText(text[start:len(text) - end])
+        self.document().clearUndoRedoStacks()
+        return True
+
     def apply_edit(self, change) -> None:
         """Run change(cursor) on the text cursor as one undoable edit (toolbar buttons)."""
         cursor = self.textCursor()
