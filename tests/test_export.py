@@ -128,3 +128,55 @@ def test_export_formats_for_sample(qapp, tmp_path):
     assert png.read_bytes().startswith(b"\x89PNG")
     what, formats = export_formats(project, project.find("screenplay"), text_of)  # folder with no prose
     assert formats == []
+
+
+def pdf_pages(path):
+    """(text, inked pixels) for each page, rendered the way a viewer would: on white paper."""
+    from PySide6.QtCore import QSize, Qt
+    from PySide6.QtGui import QImage, QPainter
+    from PySide6.QtPdf import QPdfDocument
+
+    doc = QPdfDocument()
+    doc.load(str(path))
+    pages = []
+    for i in range(doc.pageCount()):
+        image = doc.render(i, QSize(306, 396))
+        paper = QImage(image.size(), QImage.Format.Format_RGB32)
+        paper.fill(Qt.GlobalColor.white)
+        painter = QPainter(paper)
+        painter.drawImage(0, 0, image)
+        painter.end()
+        ink = sum(1 for y in range(0, paper.height(), 2) for x in range(0, paper.width(), 2)
+                  if paper.pixelColor(x, y).lightness() < 160)
+        pages.append((doc.getAllText(i).text(), ink))
+    doc.close()
+    return pages
+
+
+@pytest.mark.parametrize("node_id, expected", [
+    ("pilot", ["THE LIGHTHOUSE", "EXT. SKERRY ROCK LIGHTHOUSE - DUSK", "MARA", "It's Thursday."]),
+    ("ch01", ["Chapter 1 — The Keeper", "Skerry Rock"]),
+    ("manuscript", ["Chapter 1 — The Keeper", "Chapter 2 — Fog"]),
+    ("storymap", ["Lighthouse", "Mara Quinn"]),  # Qt drops the "Th" ligature from a board's text layer
+])
+def test_pdf_pages_have_content(qapp, tmp_path, node_id, expected):
+    """Every exported page shows something, and the text is really in the PDF (not blank pages)."""
+    from screenwriter.exportdialog import export_formats
+    from screenwriter.project import Project
+
+    project = Project.open(SAMPLE)
+    _, formats = export_formats(project, project.find(node_id), project.read_text)
+    out = tmp_path / f"{node_id}.pdf"
+    next(f for f in formats if f.extension == "pdf").run(str(out), "Letter")
+    pages = pdf_pages(out)
+    assert pages
+    assert all(ink > 0 for _, ink in pages), [ink for _, ink in pages]
+    from PySide6.QtGui import QFontDatabase
+
+    if not QFontDatabase.families():
+        pytest.skip("no fonts for headless Qt here: the PDF has boxes instead of text")
+    squeeze = lambda s: "".join(s.split())  # a board's text comes out a letter per line
+    text = squeeze(" ".join(t for t, _ in pages))
+    for s in expected:
+        assert squeeze(s) in text
+    assert "[[" not in text  # notes are never printed

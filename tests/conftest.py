@@ -3,6 +3,9 @@ import os
 import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+if os.name == "nt":
+    # Headless Qt on Windows finds no fonts by itself; without them PDFs hold empty boxes, not text.
+    os.environ.setdefault("QT_QPA_FONTDIR", os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts"))
 
 
 @pytest.fixture(scope="session")

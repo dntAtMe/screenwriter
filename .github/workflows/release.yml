@@ -77,7 +77,7 @@ jobs:
       - name: Smoke test (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
-        env: { SCREENWRITER_SMOKE_TEST: "1", SCREENWRITER_SMOKE_EXPORT: build\smoke, QT_QPA_PLATFORM: offscreen }
+        env: { SCREENWRITER_SMOKE_TEST: "1", SCREENWRITER_SMOKE_EXPORT: build\smoke, QT_QPA_PLATFORM: offscreen, QT_QPA_FONTDIR: 'C:\Windows\Fonts' }
         run: |
           $p = Start-Process -FilePath dist\Screenwriter\Screenwriter.exe -ArgumentList '"examples\The Lighthouse"' -Wait -PassThru
           if ($p.ExitCode -ne 0) { throw "app exited with $($p.ExitCode)" }
