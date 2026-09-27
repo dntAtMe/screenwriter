@@ -9,8 +9,10 @@ Syncing records a save point, reads the cloud copy's history, and then either up
 brings in the other computer's changes, or merges both:
 
 - a document changed on one side only takes that side's version;
-- a document changed on both keeps ours, and theirs becomes a copy next to it
-  ("Chapter 1 (from Laptop)") — nothing is ever overwritten;
+- a document changed on both is merged paragraph by paragraph (boards card by card, see
+  merge.py); where both changed the same paragraph, ours stays and theirs is recorded in
+  conflicts.json for someone to choose — nothing is ever overwritten. (A file that isn't
+  text can't be merged: theirs becomes a copy next to it, "Chapter 1 (from Laptop)".);
 - edited on one side and deleted on the other: the edited text is kept;
 - the binder (order, titles, synopses, new and removed items) is merged item by item.
 
@@ -33,6 +35,7 @@ from dulwich.client import LocalGitClient
 from dulwich.graph import find_merge_base
 from dulwich.repo import Repo
 
+from .merge import CONFLICTS_FILE, ConflictRecord, dump_conflicts, merge_board, merge_conflict_lists, merge_text
 from .projecthistory import BRANCH, HISTORY_DIR, ProjectHistory
 
 PACKAGE_EXT = ".screenwriter"
@@ -184,21 +187,34 @@ def open_elsewhere(package: Path, machine: str) -> str | None:
 @dataclass
 class Conflict:
     path: str  # our document, kept in place
-    copy_path: str  # their version, saved as a new document
+    copy_path: str  # their version as a new document ("" when recorded in conflicts.json instead)
     title: str
+    record: str = ""  # its id in conflicts.json
 
 
 def _doc_id(path: str) -> str:
     return Path(path).name.split(".")[0]
 
 
+def _merge_document(path: str, b: bytes | None, o: bytes, t: bytes):
+    """(merged bytes, clashes), or None when the file can't be merged as text."""
+    try:
+        texts = [(x or b"").decode("utf-8") for x in (b, o, t)]
+        merge = merge_board if path.endswith(".board.json") else merge_text
+        text, clashes = merge(*texts)
+    except (UnicodeDecodeError, ValueError, KeyError, TypeError):
+        return None
+    return text.encode("utf-8"), clashes
+
+
 def merge_files(base: dict[str, bytes], ours: dict[str, bytes], theirs: dict[str, bytes],
-                their_machine: str) -> tuple[dict[str, bytes], list[Conflict]]:
+                their_machine: str, our_machine: str = "") -> tuple[dict[str, bytes], list[Conflict]]:
     """Three-way merge of a project's files (see the module docstring)."""
     merged: dict[str, bytes] = {}
     conflicts: list[Conflict] = []
     copies: dict[str, str] = {}  # our doc id -> id of their conflicting copy
-    for path in sorted((set(base) | set(ours) | set(theirs)) - {BINDER}):
+    records = merge_conflict_lists(base.get(CONFLICTS_FILE), ours.get(CONFLICTS_FILE), theirs.get(CONFLICTS_FILE))
+    for path in sorted((set(base) | set(ours) | set(theirs)) - {BINDER, CONFLICTS_FILE}):
         b, o, t = base.get(path), ours.get(path), theirs.get(path)
         if o == t or t == b:
             result = o
@@ -206,6 +222,12 @@ def merge_files(base: dict[str, bytes], ours: dict[str, bytes], theirs: dict[str
             result = t
         elif o is None or t is None:  # edited on one side, deleted on the other: keep the text
             result = o if o is not None else t
+        elif (done := _merge_document(path, b, o, t)) is not None:
+            result, clashes = done
+            for clash in clashes:
+                record = ConflictRecord.from_clash(path, clash, our_machine, their_machine)
+                records.append(record)
+                conflicts.append(Conflict(path, "", "", record.id))
         else:
             result = o
             copy_id = uuid.uuid4().hex[:12]
@@ -224,6 +246,9 @@ def merge_files(base: dict[str, bytes], ours: dict[str, bytes], theirs: dict[str
         their_machine=their_machine,
     )
     merged[BINDER] = (json.dumps(binder, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
+    records = [r for r in records if r.path in merged]  # its document was deleted: nothing to choose
+    if records:
+        merged[CONFLICTS_FILE] = dump_conflicts(records)
     titles = {n["id"]: n["title"] for n in _flatten(binder.get("binder", []))}
     for c in conflicts:
         c.title = titles.get(_doc_id(c.path), c.path)
@@ -362,7 +387,7 @@ def sync(history: ProjectHistory, project_id: str, name: str, package: Path) -> 
     base_files = history.files_at(bases[0]) if bases else {}
     ours = history.files_at(local)
     theirs = history.files_at(remote)
-    merged, conflicts = merge_files(base_files, ours, theirs, their_machine)
+    merged, conflicts = merge_files(base_files, ours, theirs, their_machine, history.machine)
     message = f"Merged changes from {their_machine}"
     commit = history.commit_files(merged, message, [local, remote])
     history.set_head(commit)

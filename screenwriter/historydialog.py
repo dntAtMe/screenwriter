@@ -32,6 +32,8 @@ from .snapshots import DIFF_CSS, diff_html
 
 ROLE = Qt.ItemDataRole.UserRole
 BINDER = "project.json"
+CONFLICTS = "conflicts.json"
+PROJECT_FILES = {BINDER: "Binder (order, titles, synopses)", CONFLICTS: "Conflicts to review"}
 SYMBOLS = {"added": "＋", "modified": "✎", "deleted": "－"}
 
 
@@ -182,9 +184,9 @@ class HistoryDialog(QDialog):
         if not point.parents:  # the first save point: list everything it holds
             changes = [Change(p, "added") for p in self.history.files_at(point.id)]
         focus = self.scope.currentData()
-        for change in sorted(changes, key=lambda c: (c.path == BINDER, titles.get(c.path, parent_titles.get(c.path, ("", "")))[0].lower())):
-            if change.path == BINDER:
-                label = "Binder (order, titles, synopses)"
+        for change in sorted(changes, key=lambda c: (c.path in PROJECT_FILES, titles.get(c.path, parent_titles.get(c.path, ("", "")))[0].lower())):
+            if change.path in PROJECT_FILES:
+                label = PROJECT_FILES[change.path]
             else:
                 title = (titles.get(change.path) or parent_titles.get(change.path) or (change.path, ""))[0]
                 label = f"{SYMBOLS[change.kind]} {title}" + ("  (deleted)" if change.kind == "deleted" else "")
@@ -229,7 +231,7 @@ class HistoryDialog(QDialog):
         has_point = self.selected_point() is not None
         path = self.selected_path()
         self.restore_project_btn.setEnabled(has_point)
-        self.restore_doc_btn.setEnabled(has_point and path is not None and path != BINDER)
+        self.restore_doc_btn.setEnabled(has_point and path is not None and path not in PROJECT_FILES)
 
     # --- actions ------------------------------------------------------------------------
 

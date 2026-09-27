@@ -12,6 +12,7 @@ from screenwriter.google_drive import (
     OAuthFlow,
     load_client_config,
 )
+from screenwriter.merge import load_conflicts
 from screenwriter.project import PROSE, Project
 from screenwriter.projecthistory import ProjectHistory
 from screenwriter.sync import open_package, sync
@@ -138,15 +139,15 @@ def test_two_computers_sync_through_drive(google, tmp_path):
     assert desktop.sync().status == "downloaded"
     assert desktop.project.read_text(desktop.project.find(chapter.id)) == "One, from the laptop."
 
-    # both edit: merge, with the conflicting version kept as a copy
+    # both edit: merge, with the other version waiting in conflicts.json for both of them
     laptop.project.write_text(laptop.project.find(chapter.id), "Laptop.")
     laptop.sync()
     desktop.project.write_text(desktop.project.find(chapter.id), "Desktop.")
     result = desktop.sync()
     assert result.status == "merged" and result.conflicts
     assert laptop.sync().status == "downloaded"
-    titles = [n.title for n in laptop.project.root]
-    assert "Chapter 1 (from Laptop)" in titles
+    [record] = load_conflicts(laptop.project.path)
+    assert (record.kept, record.other) == ("Desktop.", "Laptop.")
 
     # presence
     laptop.target.lock("Laptop", laptop.project.id)

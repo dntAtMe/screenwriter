@@ -6,6 +6,12 @@ All notable changes to Screenwriter are listed here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- **Sync merges paragraph by paragraph**: when two people (or computers) edit the same document, changes to
+  different paragraphs combine, and boards merge card by card. Only the same paragraph changed differently is a
+  conflict — instead of a “(from Laptop)” copy of the whole document, **Review Conflicts** shows both versions
+  side by side to keep either or both. Conflicts sync, so anyone can resolve them.
+
 ## [0.3.1] - 2026-09-27
 
 ### Fixed

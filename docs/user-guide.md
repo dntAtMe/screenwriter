@@ -249,8 +249,12 @@ problem, if the cloud folder can't be reached — usually because the cloud app 
 
 - documents changed on only one computer simply take that version;
 - binder changes — new documents, renames, moves, synopses, labels — are combined;
-- a document changed **on both** keeps your version, and the other computer's version appears right below it as
-  “Chapter 1 (from Laptop)”. You'll get a message listing them; copy what you need and delete the other;
+- a document changed **on both** is merged paragraph by paragraph: edits to different paragraphs (or, on a board,
+  different cards) simply combine;
+- only when both changed **the same paragraph** differently is there a conflict. Your version stays in the
+  document, and **Review Conflicts** opens (also in the **File** menu, and from **⚠ 1 conflict to review** in the
+  status bar) with both versions side by side: **Keep This Version**, **Use Other Version** or **Keep Both**.
+  Conflicts sync too, so whoever gets to it first can choose, and the choice is undoable like any edit;
 - a document edited on one computer and deleted on the other is kept.
 
 Nothing is ever overwritten, and every sync is in the project's history, so it can be undone from **History…**.

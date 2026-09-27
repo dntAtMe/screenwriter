@@ -331,19 +331,33 @@ def test_two_windows_sync_through_a_cloud_folder(window, tmp_path, monkeypatch):
     assert desktop.sync_now().status == "downloaded"
     assert desktop.editors["ch01"].text() == "Written on the laptop."
 
-    # both change the same chapter: both versions kept, the writer is told
+    # both change the same paragraph: ours stays, the review opens, choosing theirs applies it
+    reviewed = []
+
+    class FakeReview:
+        def __init__(self, records, title_of, apply, parent=None):
+            reviewed.extend((title_of(r), r.kept, r.other) for r in records)
+            self.records, self.apply = records, apply
+
+        def exec(self):
+            assert self.apply(self.records[0], "theirs")
+
+    monkeypatch.setattr("screenwriter.mainwindow.ConflictDialog", FakeReview)
     laptop.editors["ch01"].replace_all("Laptop again.")
     laptop.sync_now()
     desktop.editors["ch01"].replace_all("Desktop again.")
     result = desktop.sync_now()
     assert result.status == "merged" and result.conflicts
-    assert any("Changed on both computers" in n for n in notices)
+    assert reviewed == [("Chapter 1 — The Keeper", "Desktop again.", "Laptop again.")]
     manuscript = desktop.binder.find_item("manuscript")
     titles = [manuscript.child(i).text(0) for i in range(manuscript.childCount())]
-    assert any(t.endswith("(from Laptop)") for t in titles)
+    assert not any(t.endswith("(from Laptop)") for t in titles)  # no copy documents any more
+    assert desktop.editors["ch01"].text() == "Laptop again."
+    assert desktop.conflicts_button.isHidden()
+    desktop.editors["ch01"].undo()  # the choice is an ordinary, undoable edit
     assert desktop.editors["ch01"].text() == "Desktop again."
 
-    # the laptop then receives the merge, including the kept copy
+    # the laptop then receives the merge (the choice made above syncs on the next save)
     assert laptop.sync_now().status == "downloaded"
     assert laptop.editors["ch01"].text() == "Desktop again."
     dispose(laptop)

@@ -25,7 +25,9 @@ from .binder import Binder
 from .capture import QuickCapture, append_idea, format_idea
 from .cast import CastPanel
 from .corkboard import CorkboardView
+from .conflictdialog import ConflictDialog
 from .exportdialog import run_export
+from . import merge
 from .formatbar import FormatBar
 from .panes import TabArea
 from .quickopen import DoubleShift, QuickOpen, Target
@@ -159,6 +161,13 @@ class MainWindow(QMainWindow):
 
         self.sync_label = QLabel()
         self.sync_label.setStyleSheet("color: gray;")
+        self.conflicts_button = QPushButton()
+        self.conflicts_button.setFlat(True)
+        self.conflicts_button.setStyleSheet("color: #b5563c; font-weight: 600;")
+        self.conflicts_button.setToolTip("Paragraphs two people changed differently — choose what to keep")
+        self.conflicts_button.clicked.connect(self.review_conflicts)
+        self.conflicts_button.hide()
+        self.statusBar().addPermanentWidget(self.conflicts_button)
         self.statusBar().addPermanentWidget(self.sync_label)
         self.stats_label = QLabel()
         self.element_label = QLabel()
@@ -221,6 +230,7 @@ class MainWindow(QMainWindow):
             self._action(file, "History…", self.show_history, "Ctrl+Alt+H"),
             self._action(file, "Older Snapshots…", self.show_older_snapshots),
             self._action(file, "Sync & Backup…", self.show_sync_settings),
+            self._action(file, "Review Conflicts…", self.review_conflicts),
             self._action(file, "Share a Copy…", self.share_copy),
             self._action(file, "Close Tab", lambda: self.close_tab(self.tabs.currentIndex()), "Ctrl+W"),
             self._action(file, "Close Project", self._close_project_from_menu),
@@ -369,6 +379,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(f"{project.name} — {APP_NAME}")
         self._remember(project.path)
         self._refresh_bible()
+        self._update_conflicts_button()
         if self.sync_target:
             self._start_sync()
         for node_id in self.settings.value(f"open_tabs/{project.path}", []) or []:
@@ -389,6 +400,7 @@ class MainWindow(QMainWindow):
                 pass
         self.sync_target = None
         self.sync_label.clear()
+        self.conflicts_button.hide()
         self.history.pack()
         self.history.close()
         self.history = None
@@ -672,8 +684,14 @@ class MainWindow(QMainWindow):
         self.sync_label.setToolTip(target.describe())
         if result.status in ("downloaded", "merged"):
             self.statusBar().showMessage(f"Brought in changes from {result.machine}", 5000)
-        if result.conflicts:
-            names = "\n".join(f"• {c.title}" for c in result.conflicts)
+        self._update_conflicts_button()
+        if any(not c.copy_path for c in result.conflicts):
+            self.statusBar().showMessage(
+                f"{result.machine} changed the same paragraphs as you — review the conflicts", 8000)
+            if not quiet:
+                self.review_conflicts()
+        if copies := [c for c in result.conflicts if c.copy_path]:
+            names = "\n".join(f"• {c.title}" for c in copies)
             QMessageBox.information(
                 self, "Changed on both computers",
                 f"These were changed here and on {result.machine} since the last sync:\n\n{names}\n\n"
@@ -702,6 +720,47 @@ class MainWindow(QMainWindow):
                 editor.set_text(self.project.read_text(node))
         self._refresh_bible()
         self._refresh_outline()
+
+    # --- conflicts ----------------------------------------------------------------------
+
+    def _update_conflicts_button(self) -> None:
+        count = len(merge.load_conflicts(self.project.path)) if self.project else 0
+        self.conflicts_button.setText(f"⚠ {count} conflict{'s' if count != 1 else ''} to review")
+        self.conflicts_button.setVisible(count > 0)
+
+    def _conflict_title(self, record) -> str:
+        node = self.project.find(self._node_id_for(record.path)) if self.project else None
+        return node.title if node else record.path
+
+    def review_conflicts(self) -> None:
+        if self.project is None:
+            return
+        records = merge.load_conflicts(self.project.path)
+        if not records:
+            QMessageBox.information(self, "Review Conflicts", "Nothing to review — no one's changes clashed.")
+            return
+        ConflictDialog(records, self._conflict_title, self.resolve_conflict, self).exec()
+        self._update_conflicts_button()
+
+    def resolve_conflict(self, record, choice: str) -> bool:
+        """Apply a choice to the document (undoably, if it's open) and forget the conflict."""
+        node = self.project.find(self._node_id_for(record.path))
+        if node is not None:
+            text = self._text_of(node)
+            new = merge.resolve(text, record, choice)
+            if new is None:
+                return False
+            if new != text:
+                if editor := self.editors.get(node.id):
+                    editor.replace_all(new)
+                    self.save_all()
+                else:
+                    self.project.write_text(node, new)
+                self._refresh_bible()
+        remaining = [r for r in merge.load_conflicts(self.project.path) if r.id != record.id]
+        merge.save_conflicts(self.project.path, remaining)
+        self._update_conflicts_button()
+        return True
 
     def _stop_syncing(self) -> None:
         if self.sync_target:
