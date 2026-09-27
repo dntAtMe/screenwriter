@@ -112,3 +112,8 @@ def test_same_words_still_clash():
     base = "The boat is late."
     text, [clash] = merge_text(base, "The boat is early.", "The boat is gone.")
     assert text == "The boat is early." and clash.other == "The boat is gone."
+
+
+def test_line_endings_dont_matter():
+    base = "One.\r\n\r\nTwo.\r\n"
+    assert merge_text(base, "One!\n\nTwo.\n", "One.\n\nTwo?\n") == ("One!\n\nTwo?\n", [])

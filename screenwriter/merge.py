@@ -107,6 +107,8 @@ def merge_text(base: str, ours: str, theirs: str) -> tuple[str, list[Clash]]:
     """diff3-style merge by lines (a prose paragraph is a line), then by words inside a
     paragraph both sides changed. Changes in different places combine; where both changed
     the same words differently, ours is kept and a Clash is reported."""
+    # Windows line endings (older files, or a copy saved on Windows) are the same lines
+    base, ours, theirs = (s.replace("\r\n", "\n") for s in (base, ours, theirs))
     if ours == theirs or theirs == base:
         return ours, []
     if ours == base:

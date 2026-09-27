@@ -37,3 +37,13 @@ def test_sample_project_opens():
     sample = Project.open(Path(__file__).parent.parent / "examples" / "The Lighthouse")
     assert sample.name == "The Lighthouse"
     assert "MARA" in sample.read_text(sample.find("pilot"))
+
+
+def test_documents_are_saved_with_plain_newlines(tmp_path):
+    from screenwriter.project import PROSE, Project
+
+    p = Project.create(tmp_path / "P", "P")
+    node = p.new_node(PROSE, "Doc")
+    p.root.insert(0, node)
+    p.write_text(node, "a\nb\n")
+    assert p.doc_path(node).read_bytes() == b"a\nb\n"

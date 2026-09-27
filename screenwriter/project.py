@@ -72,7 +72,7 @@ class Node:
 
 def _write_atomic(path: Path, text: str) -> None:
     tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(text, encoding="utf-8")
+    tmp.write_text(text, encoding="utf-8", newline="\n")  # the same line endings on every system
     os.replace(tmp, path)
 
 

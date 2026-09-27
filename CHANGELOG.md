@@ -13,6 +13,8 @@ All notable changes to Screenwriter are listed here. The format follows
 ### Changed
 - Merging goes down to words: two people changing different sentences of the same paragraph no longer conflict.
 - A sync that brings in changes to an open document keeps your cursor and scroll position.
+- Documents are saved with the same line endings on every system, and merging ignores the difference, so
+  projects shared between Windows and Mac/Linux merge line by line.
 
 ## [0.4.0] - 2026-09-27
 
