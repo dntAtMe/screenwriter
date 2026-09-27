@@ -154,8 +154,9 @@ def wrap_line(s: str, width: int) -> list[str]:
             used += line[-1][1] - line[-1][0]
         if chunks and chunks[-1][1] - chunks[-1][0] > width:  # a word longer than a line fills this one
             cut = chunks[-1][0] + (width - used if width >= 1 else 1)
-            line.append([chunks[-1][0], cut])
-            chunks[-1][0] = cut
+            if cut > chunks[-1][0]:  # no empty piece: older textwraps kept a trailing space that way
+                line.append([chunks[-1][0], cut])
+                chunks[-1][0] = cut
         if line and is_space(line[-1]):
             line.pop()
         if line:

@@ -195,7 +195,10 @@ def test_wrap_line_matches_textwrap():
         s = " ".join(rng.choice(words) for _ in range(rng.randint(0, 30)))
         s = " " * rng.randint(0, 2) + s + " " * rng.randint(0, 2)
         for width in (25, 35, 38, 60):
-            assert wrap_line(s, width) == textwrap.wrap(s, width, break_on_hyphens=False), (s, width)
+            lines = wrap_line(s, width)
+            # older Pythons' textwrap can leave a trailing space before a cut-up long word; newer ones don't
+            assert lines == [line.rstrip() for line in textwrap.wrap(s, width, break_on_hyphens=False)], (s, width)
+            assert all(len(line) <= width and line == line.rstrip() for line in lines)
 
 
 def test_emphasis_is_kept_as_styles():
