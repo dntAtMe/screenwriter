@@ -6,12 +6,15 @@ All notable changes to Screenwriter are listed here. The format follows
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-09-27
+
 ### Added
 - **Live editing** on shared folders and network drives: see what others type in the same chapter or script
   within a second or two, with their paragraph tinted and named in their colour (**View → Live Editing**).
 
 ### Changed
-- Merging goes down to words: two people changing different sentences of the same paragraph no longer conflict.
+- Merging goes down to words: two people changing different sentences of the same paragraph no longer conflict,
+  and text both added at the same spot is kept from both instead of becoming a conflict.
 - A sync that brings in changes to an open document keeps your cursor and scroll position.
 - Documents are saved with the same line endings on every system, and merging ignores the difference, so
   projects shared between Windows and Mac/Linux merge line by line.
@@ -114,7 +117,8 @@ The first release.
 - Packages for macOS (`.dmg`), Windows (installer and portable `.zip`) and Linux (`.AppImage`, `.tar.gz`).
 - Released under the MIT License.
 
-[Unreleased]: https://github.com/dntAtMe/screenwriter/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/dntAtMe/screenwriter/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/dntAtMe/screenwriter/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/dntAtMe/screenwriter/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/dntAtMe/screenwriter/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/dntAtMe/screenwriter/compare/v0.2.0...v0.3.0
