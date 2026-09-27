@@ -19,7 +19,7 @@ from .editors.common import word_count
 from .projecthistory import ProjectHistory
 
 MERGE_PREFIX = "Merged changes from"
-PROJECT_FILES = ("project.json", "conflicts.json")
+PROJECT_FILES = ("project.json", "conflicts.json", "dictionary.txt")
 
 
 @dataclass

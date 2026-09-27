@@ -63,6 +63,19 @@ again to take the formatting off. **View → Formatting Toolbar** hides or shows
 
 The word count is in the status bar; select text to count just that.
 
+### Spelling
+
+Misspelled words get a red squiggle, in chapters, notes, scripts and Story Bible notes. Right-click one for
+suggestions (they appear after a moment), **Add to Project Dictionary**, or **Ignore** (until you close the app).
+
+- **Languages** are chosen per project in **Edit → Spelling**: *Polski*, *English (US)*, *English (UK)* — tick
+  more than one if you write in more than one; a word is right if any of them knows it. A new project starts with
+  your computer's language (Polish and English on a Polish computer).
+- The **project dictionary** (**Edit → Spelling → Project Dictionary…**) is shared with everyone the project syncs
+  with. Story Bible names — *Xardas*, *Skerry Rock* — are always accepted.
+- Short words in capitals (INT, EXT, V.O.) and the title page of a script aren't checked. **Edit → Spelling →
+  Check Spelling** turns it off.
+
 ## Writing screenplays
 
 Screenplays are written in [Fountain](https://fountain.io/syntax), a plain-text screenplay format, and laid

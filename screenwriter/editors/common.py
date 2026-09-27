@@ -4,6 +4,35 @@ from PySide6.QtGui import QFontDatabase, QPalette, QTextCursor
 from PySide6.QtWidgets import QAbstractScrollArea
 
 from ..marks import strip_marks
+from ..spelling import words_to_check
+
+SPELLING_RED = "#d9534f"
+
+
+def underline_misspelled(highlighter, text: str, spell) -> None:
+    """Red squiggles under the words of `text` the spell checker doesn't know (keeping the
+    rest of each character's format). Words not checked yet get theirs once they are."""
+    if spell is None:
+        return
+    from PySide6.QtGui import QColor, QTextCharFormat
+
+    for start, end, word in words_to_check(text):
+        if spell.status(word) is False:
+            for i in range(start, end):
+                f = highlighter.format(i)
+                f.setUnderlineStyle(QTextCharFormat.UnderlineStyle.SpellCheckUnderline)
+                f.setUnderlineColor(QColor(SPELLING_RED))
+                highlighter.setFormat(i, 1, f)
+
+
+def word_at(editor, pos: int):
+    """(start, end, word) of the checkable word around a document position, or None."""
+    block = editor.document().findBlock(pos)
+    offset = pos - block.position()
+    for start, end, word in words_to_check(block.text()):
+        if start <= offset <= end:
+            return block.position() + start, block.position() + end, word
+    return None
 
 WORD_RE = re.compile(r"[\w'’-]+")
 

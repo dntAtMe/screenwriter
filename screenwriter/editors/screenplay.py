@@ -44,8 +44,16 @@ from ..fountain import AFTER_BREAK, EL_NAMES, IN_DIALOGUE, SCENE_PREFIXES, SCENE
 from ..bible import BibleIndex
 from ..marks import MARK_RE
 from .biblemenu import add_bible_menu, add_cue_menu, add_mark_menu
+from .spellmenu import add_spelling_menu
 from .history import TextHistory
-from .common import TextDocumentAPI, center_column, first_available_font, paint_margins_as_page, word_count
+from .common import (
+    TextDocumentAPI,
+    center_column,
+    first_available_font,
+    paint_margins_as_page,
+    underline_misspelled,
+    word_count,
+)
 
 PAGE_CHARS = 60  # 6" of Courier 12pt at 10 characters per inch
 LINES_PER_PAGE = 55
@@ -138,6 +146,8 @@ class FountainHighlighter(QSyntaxHighlighter):
         stripped = text.lstrip()
         if stripped[:1] in FORCED_MARKERS and el not in (El.DIALOGUE, El.PARENTHETICAL):
             self.setFormat(len(text) - len(stripped), 1, _fmt(color=self.GREY))
+        if el != El.TITLE_PAGE:
+            underline_misspelled(self, text, self.editor.spell)
 
 
 class ScreenplayEditor(TextDocumentAPI, QTextEdit):
@@ -146,7 +156,9 @@ class ScreenplayEditor(TextDocumentAPI, QTextEdit):
     bibleRequested = Signal(str, str)  # "character" | "location", NAME
     bibleAddRequested = Signal(str, str)  # kind, selected text
     bibleAliasRequested = Signal(str, str)  # entry node id, selected text
+    addWordRequested = Signal(str)  # to the project dictionary
     bible_index = BibleIndex()  # set by the main window
+    spell = None  # the SpellService, set by the main window
 
     # Set by the main window: story bible names for completion, and entry lookup.
     bible_names: Callable[[], tuple[list[str], list[str]]] = staticmethod(lambda: ([], []))
@@ -636,6 +648,7 @@ class ScreenplayEditor(TextDocumentAPI, QTextEdit):
         add_mark_menu(menu, self, self.bible_index, self.cursorForPosition(e.pos()).position())
         if el == El.CHARACTER and target and target[1] and not self.bible_lookup("character", target[1]):
             add_cue_menu(menu, self, target[1], self.bible_index)
+        add_spelling_menu(menu, self, self.spell, self.cursorForPosition(e.pos()).position(), self.addWordRequested.emit)
         menu.exec(e.globalPos())
 
     # --- completion -------------------------------------------------------------

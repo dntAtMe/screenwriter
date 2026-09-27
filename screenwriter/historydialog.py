@@ -33,7 +33,8 @@ from .diff import DIFF_CSS, diff_html
 ROLE = Qt.ItemDataRole.UserRole
 BINDER = "project.json"
 CONFLICTS = "conflicts.json"
-PROJECT_FILES = {BINDER: "Binder (order, titles, synopses)", CONFLICTS: "Conflicts to review"}
+PROJECT_FILES = {BINDER: "Binder (order, titles, synopses)", CONFLICTS: "Conflicts to review",
+                 "dictionary.txt": "Project dictionary (spelling)"}
 SYMBOLS = {"added": "＋", "modified": "✎", "deleted": "－"}
 
 

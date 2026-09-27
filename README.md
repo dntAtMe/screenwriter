@@ -70,4 +70,6 @@ See [Development](docs/development.md) for tests, packaging and how releases are
 ## License
 
 Screenwriter is free and open source under the [MIT License](LICENSE). The app bundles Qt and PySide6,
-which are available under the LGPLv3.
+which are available under the LGPLv3. The spelling dictionaries come from
+[LibreOffice](https://github.com/LibreOffice/dictionaries) (Polish: sjp.pl, under GPL / LGPL / MPL / Apache /
+CC SA; English: SCOWL, under a BSD-style licence); their notices are inside each dictionary's zip.

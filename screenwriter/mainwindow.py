@@ -32,6 +32,7 @@ from . import merge, people
 from .formatbar import FormatBar
 from .liveedit import LiveEditing
 from .panes import TabArea
+from . import spelling
 from .updates import UpdatesPanel, arrived, recent_updates
 from .quickopen import DoubleShift, QuickOpen, Target
 from .shortcuthints import ShortcutHints
@@ -218,12 +219,16 @@ class MainWindow(QMainWindow):
         self.save_timer = QTimer(self, singleShot=True, interval=1500)
         self.save_timer.timeout.connect(self.save_all)
 
+        self.spell = spelling.SpellService(self)
         self._build_menus()
         self._update_format_bar()
         self.shortcut_hints = ShortcutHints(self)
         self.double_shift = DoubleShift(self)
         self.live = LiveEditing(self)
         self.live.enabled = self.live_action.isChecked()
+        self.spell_redraw = QTimer(self, singleShot=True, interval=250)
+        self.spell_redraw.timeout.connect(self._redraw_spelling)
+        self.spell.checked.connect(self.spell_redraw.start)
         self.double_shift.triggered.connect(self.quick_open)
         self.shortcut_hints.set_enabled(self.hints_action.isChecked())
         self._set_project_actions_enabled(False)
@@ -270,6 +275,20 @@ class MainWindow(QMainWindow):
             self._action(edit, "Undo", lambda: self._current_call("undo"), QKeySequence.StandardKey.Undo),
             self._action(edit, "Redo", lambda: self._current_call("redo"), QKeySequence.StandardKey.Redo),
         ]
+        edit.addSeparator()
+        spell_menu = edit.addMenu("Spelling")
+        self.spell_action = self._action(spell_menu, "Check Spelling", self._toggle_spelling)
+        self.spell_action.setCheckable(True)
+        self.spell_action.setChecked(self.settings.value("spelling", True, type=bool))
+        spell_menu.addSeparator()
+        self.language_actions = {}
+        for code, label in spelling.LANGUAGES.items():
+            action = self._action(spell_menu, label, lambda _=False, c=code: self._toggle_language(c))
+            action.setCheckable(True)
+            self.language_actions[code] = action
+            self.project_actions.append(action)
+        spell_menu.addSeparator()
+        self.project_actions.append(self._action(spell_menu, "Project Dictionary…", self.show_project_dictionary))
         edit.addSeparator()
         self.project_actions += [
             self._action(edit, "Find…", self.find_bar.open_bar, QKeySequence.StandardKey.Find),
@@ -413,6 +432,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(f"{project.name} — {self._app_title()}")
         self._remember(project.path)
         self._refresh_bible()
+        self._apply_spelling()
         self._update_conflicts_button()
         self.binder.set_unread(set(self.settings.value(f"unread/{project.id}", []) or []))
         self._refresh_updates()
@@ -492,6 +512,8 @@ class MainWindow(QMainWindow):
             editor.bible_index = self.bible_index
             editor.bibleRequested.connect(self.open_bible_entry)
             self._connect_bible_menu(editor)
+            editor.spell = self.spell
+            editor.addWordRequested.connect(self.add_spelling_word)
         elif node.kind in BIBLE_KINDS:
             editor = BibleEditor(node.kind, self._scan_documents)
             editor.nameChanged.connect(lambda name, i=node_id: self._rename_from_editor(i, name))
@@ -500,6 +522,8 @@ class MainWindow(QMainWindow):
             editor.notes.set_bible(self.bible_index)
             editor.notes.bibleOpenRequested.connect(self.open_document)
             self._connect_bible_menu(editor.notes)
+            editor.notes.highlighter.spell = self.spell
+            editor.notes.addWordRequested.connect(self.add_spelling_word)
         elif node.kind == BOARD:
             editor = BoardEditor(self._node_title)
             editor.openRequested.connect(self.open_document)
@@ -508,6 +532,8 @@ class MainWindow(QMainWindow):
             editor.set_bible(self.bible_index)
             editor.bibleOpenRequested.connect(self.open_document)
             self._connect_bible_menu(editor)
+            editor.highlighter.spell = self.spell
+            editor.addWordRequested.connect(self.add_spelling_word)
         editor.node_id = node_id
         editor.set_text(self.project.read_text(node))
         editor.textChanged.connect(self.save_timer.start)
@@ -749,8 +775,11 @@ class MainWindow(QMainWindow):
 
     def _reload_after_sync(self, changed: list[str]) -> None:
         """Show what sync changed on disk: the binder, and any open documents."""
+        if "dictionary.txt" in changed:
+            self._refresh_known_words()
         if "project.json" in changed:
             self.project = Project.open(self.project.path)
+            self._apply_spelling()
             self.binder.load(self.project)
             for node_id in self._open_tab_ids():
                 node = self.project.find(node_id)
@@ -781,6 +810,99 @@ class MainWindow(QMainWindow):
         """"Screenwriter", or "Screenwriter (Anna)" for a second copy run with SCREENWRITER_PROFILE."""
         name = QApplication.applicationName()
         return name if name.startswith(APP_NAME) else APP_NAME
+
+    # --- spelling -------------------------------------------------------------------------
+
+    def _languages(self) -> list[str]:
+        return (self.project.spelling if self.project and self.project.spelling is not None
+                else spelling.default_languages())
+
+    def _apply_spelling(self) -> None:
+        """The project's languages, on or off as the menu says."""
+        languages = self._languages() if self.project else []
+        for code, action in self.language_actions.items():
+            action.setChecked(code in languages)
+        self.spell.enabled = self.spell_action.isChecked()
+        self.spell.set_languages(languages if self.spell.enabled else [])
+        self.spell_redraw.start()
+
+    def _refresh_known_words(self) -> None:
+        """The project dictionary and every word of the Story Bible's names."""
+        if self.project is None:
+            return
+        words = set(spelling.read_words(self.project.path))
+        for entry in self.bible_index.entries:
+            for name in entry.names:
+                words.update(spelling.WORD_RE.findall(name.rstrip("*")))
+        self.spell.set_known(words)
+
+    def _toggle_spelling(self) -> None:
+        self.settings.setValue("spelling", self.spell_action.isChecked())
+        self._apply_spelling()
+
+    def _toggle_language(self, code: str) -> None:
+        languages = [c for c in self._languages() if c != code]
+        if self.language_actions[code].isChecked():
+            languages.append(code)
+        if not languages:  # keep at least one
+            self.language_actions[code].setChecked(True)
+            return
+        self.project.spelling = [c for c in spelling.LANGUAGES if c in languages]
+        self._save_structure()
+        self._apply_spelling()
+
+    def add_spelling_word(self, word: str) -> None:
+        if self.project is None:
+            return
+        spelling.add_word(self.project.path, word)
+        self._refresh_known_words()
+        self.statusBar().showMessage(f"“{word}” added to the project dictionary", 3000)
+
+    def show_project_dictionary(self) -> None:
+        if self.project is None:
+            return
+        from PySide6.QtWidgets import QDialog, QDialogButtonBox
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Project Dictionary")
+        dialog.resize(360, 420)
+        words = QListWidget()
+        words.addItems(sorted(spelling.read_words(self.project.path), key=str.lower))
+        note = QLabel("Words spelling accepts in this project (shared with everyone who syncs it). "
+                      "Story Bible names are accepted too.")
+        note.setWordWrap(True)
+        note.setStyleSheet("color: gray;")
+        remove = QPushButton("Remove")
+
+        def drop() -> None:
+            for item in words.selectedItems():
+                words.takeItem(words.row(item))
+            kept = [words.item(i).text() for i in range(words.count())]
+            path = self.project.path / spelling.WORD_FILE
+            path.write_text("".join(f"{w}\n" for w in kept), encoding="utf-8", newline="\n")
+            self._refresh_known_words()
+
+        remove.clicked.connect(drop)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        buttons.rejected.connect(dialog.reject)
+        layout = QVBoxLayout(dialog)
+        layout.addWidget(note)
+        layout.addWidget(words, 1)
+        row = QHBoxLayout()
+        row.addWidget(remove)
+        row.addStretch()
+        row.addWidget(buttons)
+        layout.addLayout(row)
+        dialog.exec()
+
+    def _redraw_spelling(self) -> None:
+        """Redraw the squiggles in the documents on screen (answers came in, or settings changed)."""
+        for pane in self.tabs.panes:
+            editor = pane.currentWidget()
+            if isinstance(editor, BibleEditor):
+                editor = editor.notes
+            if isinstance(editor, (ProseEditor, ScreenplayEditor)):
+                editor.highlighter.rehighlight()
 
     # --- people ---------------------------------------------------------------------------
 
@@ -1156,6 +1278,7 @@ class MainWindow(QMainWindow):
         editor = self.tabs.widget(index)
         self._update_format_bar()
         self._update_banner()
+        self.spell_redraw.start()
         if editor is not None and editor.node_id in self.binder.unread:
             self._set_unread(self.binder.unread - {editor.node_id})
         if self.sync_target:
@@ -1405,6 +1528,7 @@ class MainWindow(QMainWindow):
         """Rebuild the name index and hand it to every editor and the cast panel."""
         entries = [(n.id, n.kind, text) for n, text in self._bible_entries()]
         self.bible_index = bible.BibleIndex(entries)
+        self._refresh_known_words()
         for editor in self.editors.values():
             if isinstance(editor, ProseEditor):
                 editor.set_bible(self.bible_index)
@@ -1580,6 +1704,7 @@ class MainWindow(QMainWindow):
         self.settings.setValue("splitter", self.splitter.saveState())
         self.close_project()
         QApplication.instance().removeEventFilter(self.shortcut_hints)
+        self.spell.stop()
         QApplication.instance().removeEventFilter(self.double_shift)
         self.tabs.detach()
         # While Qt tears the window down it still emits signals (tab changes,

@@ -301,7 +301,7 @@ def merge_binder(base: dict, ours: dict, theirs: dict, present: set[str],
         return out
 
     merged = dict(ours)
-    for key in ("name", "inbox", "id", "format"):
+    for key in ("name", "inbox", "id", "format", "spelling"):
         bv, ov, tv = base.get(key), ours.get(key), theirs.get(key)
         if ov == bv and tv != bv and tv is not None:
             merged[key] = tv

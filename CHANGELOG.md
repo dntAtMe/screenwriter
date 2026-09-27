@@ -7,6 +7,8 @@ All notable changes to Screenwriter are listed here. The format follows
 ## [Unreleased]
 
 ### Added
+- **Spell checking** in Polish and English (US / UK): red squiggles, suggestions and a project dictionary shared
+  through sync; languages per project (**Edit → Spelling**), Story Bible names always accepted.
 - **Mentions before a character is named**: mark a description (“the hooded figure”) as a Story Bible character
   from the right-click menu — one mention, or every one in the document — and a script's description cue
   (HOODED FIGURE) as that character for the whole script. They count in **Appears in** and the **Cast** panel,

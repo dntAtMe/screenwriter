@@ -15,7 +15,15 @@ from ..bible import CHARACTER, BibleIndex
 from ..fountain import OutlineItem
 from ..marks import MARK_RE
 from .biblemenu import add_bible_menu, add_mark_menu
-from .common import TextDocumentAPI, center_column, first_available_font, paint_margins_as_page, word_count
+from .spellmenu import add_spelling_menu
+from .common import (
+    TextDocumentAPI,
+    center_column,
+    first_available_font,
+    paint_margins_as_page,
+    underline_misspelled,
+    word_count,
+)
 
 COLUMN_CHARS = 70
 BIBLE_COLORS = {"character": "#c07a2c", "location": "#2f8a86"}  # match the binder icons
@@ -53,6 +61,7 @@ class MarkdownHighlighter(QSyntaxHighlighter):
             "marker": _fmt(color="#9aa0a8"),
         }
         self.bible = BibleIndex()
+        self.spell = None  # the SpellService, set by the window
 
     def highlightBlock(self, text: str) -> None:
         heading = re.match(r"^(#{1,6})\s", text)
@@ -61,6 +70,7 @@ class MarkdownHighlighter(QSyntaxHighlighter):
             scale = {1: 1.6, 2: 1.35, 3: 1.15}.get(level, 1.0)
             self.setFormat(0, len(text), _fmt(bold=True, scale=scale, base=self.base_font))
             self.setFormat(0, level, self.formats["marker"])
+            underline_misspelled(self, text, self.spell)
             return
         if text.startswith(">"):
             self.setFormat(0, len(text), self.formats["quote"])
@@ -77,6 +87,7 @@ class MarkdownHighlighter(QSyntaxHighlighter):
                 f.setUnderlineStyle(QTextCharFormat.UnderlineStyle.DotLine)
                 f.setUnderlineColor(QColor(BIBLE_COLORS.get(entry.kind, "#888")))
                 self.setFormat(i, 1, f)
+        underline_misspelled(self, text, self.spell)
 
 
 HEADING_RE = re.compile(r"^(#{1,6})\s+(.*)")
@@ -95,6 +106,7 @@ class ProseEditor(TextDocumentAPI, QPlainTextEdit):
     bibleOpenRequested = Signal(str)  # entry node id
     bibleAddRequested = Signal(str, str)  # kind, name
     bibleAliasRequested = Signal(str, str)  # entry node id, another name for it
+    addWordRequested = Signal(str)  # to the project dictionary
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -174,6 +186,8 @@ class ProseEditor(TextDocumentAPI, QPlainTextEdit):
         if name and (entry is None or self.textCursor().hasSelection()):
             add_bible_menu(menu, name, self.bible, self.bibleAddRequested.emit, self.bibleAliasRequested.emit)
         add_mark_menu(menu, self, self.bible, self.cursorForPosition(e.pos()).position())
+        add_spelling_menu(menu, self, self.highlighter.spell, self.cursorForPosition(e.pos()).position(),
+                          self.addWordRequested.emit)
         if entry:
             first = menu.actions()[0]
             action = menu.addAction(f"Open “{entry.name}” in Story Bible")

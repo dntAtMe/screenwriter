@@ -84,6 +84,7 @@ class Project:
         self.id = project_id or uuid.uuid4().hex  # stable across copies and computers (sync)
         self.root = root
         self.inbox_id = inbox_id
+        self.spelling: list[str] | None = None  # spell-check languages ("pl_PL", "en_US"); None: this computer's
         self._ensure_trash()
 
     @classmethod
@@ -100,6 +101,7 @@ class Project:
         (path / DOCS_DIR).mkdir(exist_ok=True)
         root = [Node.from_dict(d) for d in data.get("binder", [])]
         project = cls(path, data.get("name", path.name), root, data.get("inbox"), data.get("id"))
+        project.spelling = data.get("spelling")
         if not data.get("id"):
             project.save()  # older projects get their permanent id now
         return project
@@ -117,6 +119,8 @@ class Project:
         }
         if self.inbox_id:
             data["inbox"] = self.inbox_id
+        if self.spelling is not None:
+            data["spelling"] = self.spelling
         _write_atomic(self.path / PROJECT_FILE, json.dumps(data, indent=2, ensure_ascii=False) + "\n")
 
     def _ensure_trash(self) -> None:
