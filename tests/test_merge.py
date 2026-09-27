@@ -38,12 +38,21 @@ def test_insertions_and_deletions_combine():
     assert merge_text(BASE, ours, theirs)[0] == "Zero.\n\nOne.\n\nTwo.\n\nThree.\n\nThree and a half.\n\nFour."
 
 
-def test_same_paragraph_clash_keeps_ours():
-    ours = BASE.replace("Two.", "Two, ours.")
-    theirs = BASE.replace("Two.", "Two, theirs.").replace("Four.", "Four, theirs.")
+def test_same_words_changed_clash_keeps_ours():
+    ours = BASE.replace("Two.", "Deux.")
+    theirs = BASE.replace("Two.", "Dwa.").replace("Four.", "Four, theirs.")
     text, [clash] = merge_text(BASE, ours, theirs)
-    assert text == "One.\n\nTwo, ours.\n\nThree.\n\nFour, theirs."  # the rest of theirs still comes in
-    assert (clash.kept, clash.other, clash.base, clash.before) == ("Two, ours.", "Two, theirs.", "Two.", "")
+    assert text == "One.\n\nDeux.\n\nThree.\n\nFour, theirs."  # the rest of theirs still comes in
+    assert (clash.kept, clash.other, clash.base, clash.before) == ("Deux.", "Dwa.", "Two.", "")
+
+
+def test_both_added_at_the_same_spot_keeps_both():
+    ours = BASE.replace("Two.", "Two, ours.")
+    theirs = BASE.replace("Two.", "Two, theirs.")
+    assert merge_text(BASE, ours, theirs) == (BASE.replace("Two.", "Two, ours, theirs."), [])
+    assert merge_text(BASE, ours, theirs, theirs_first=True)[0] == BASE.replace("Two.", "Two, theirs, ours.")
+    # one side has only seen the other's typing half-way: the fuller one wins, nothing doubles
+    assert merge_text("A.", "A the boat.", "A the bo.") == ("A the boat.", [])
 
 
 def test_clash_where_we_deleted():
@@ -117,3 +126,22 @@ def test_same_words_still_clash():
 def test_line_endings_dont_matter():
     base = "One.\r\n\r\nTwo.\r\n"
     assert merge_text(base, "One!\n\nTwo.\n", "One.\n\nTwo?\n") == ("One!\n\nTwo?\n", [])
+
+
+def test_rebase_keeps_my_edits_and_theirs():
+    from screenwriter.liveedit import rebase
+
+    def apply(shared, edits):
+        for start, end, text in reversed(edits):
+            shared = shared[:start] + text + shared[end:]
+        return shared
+
+    head = "# T\n\nMara."
+    # both added at the same spot before joining: both kept
+    assert apply("# T b1\n\nMara.", rebase(head, "# T\n a1\nMara.", "# T b1\n\nMara.")) == "# T b1\n a1\nMara."
+    # a lone space is still mine to add
+    assert apply("Title", rebase("Title", " Title", "Title")) == " Title"
+    # my deletion applies only where their text is untouched
+    assert apply("one two three four", rebase("one two three", "one three", "one two three four")) == "one three four"
+    # what already reached them another way isn't added twice
+    assert apply("A b1 c.", rebase("A c.", "A b1 c.", "A b1 c.")) == "A b1 c."

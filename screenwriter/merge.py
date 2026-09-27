@@ -88,24 +88,49 @@ def _merge_seq(b: list[str], o: list[str], t: list[str]):
         ib, io, it = j, eo, et
 
 
-TOKEN_RE = re.compile(r"\s+|\w+|[^\w\s]")
+TOKEN_RE = re.compile(r"\n|[^\S\n]+|\w+|[^\w\s]")  # line breaks on their own, then spaces, words, punctuation
 
 
-def _merge_words(base: str, ours: str, theirs: str) -> str | None:
+def _is_snapshot(small: str, big: str) -> bool:
+    """Whether `small` looks like `big` seen half-way through being typed: its start, with
+    at least a letter in it (a lone space or comma is somebody's own)."""
+    return big.startswith(small) and any(ch.isalnum() for ch in small)
+
+
+def _both_added(ours: list[str], theirs: list[str], theirs_first: bool, glue: str) -> list[str]:
+    """Both sides added something at the same spot (and removed nothing). If one addition is
+    an earlier snapshot of the other — typing seen half-way — keep the fuller one; otherwise
+    keep both, in an order both sides agree on."""
+    o, t = glue.join(ours), glue.join(theirs)
+    if _is_snapshot(t, o):
+        return ours
+    if _is_snapshot(o, t):
+        return theirs
+    first, second = (theirs, ours) if theirs_first else (ours, theirs)
+    if glue == "" and first and second and first[-1][-1:].isalnum() and second[0][:1].isalnum():
+        return first + [" "] + second  # two words, not one run together
+    return first + second
+
+
+def _merge_words(base: str, ours: str, theirs: str, theirs_first: bool = False) -> str | None:
     """The same paragraph changed on both sides: merge it word by word, so edits to
-    different sentences (or words) combine. None if they touch the same words."""
+    different sentences (or words) combine. None if they change the same words."""
     tokens = lambda s: TOKEN_RE.findall(s)
     out = []
     for part in _merge_seq(tokens(base), tokens(ours), tokens(theirs)):
         if part[0] == "clash":
-            return None
-        out += part[1]
+            if part[1]:  # both changed the same words
+                return None
+            out += _both_added(part[2], part[3], theirs_first, "")
+        else:
+            out += part[1]
     return "".join(out)
 
 
-def merge_text(base: str, ours: str, theirs: str) -> tuple[str, list[Clash]]:
+def merge_text(base: str, ours: str, theirs: str, theirs_first: bool = False) -> tuple[str, list[Clash]]:
     """diff3-style merge by lines (a prose paragraph is a line), then by words inside a
-    paragraph both sides changed. Changes in different places combine; where both changed
+    paragraph both sides changed. Changes in different places combine; things both added
+    at the same spot are both kept (ours first, unless `theirs_first`); where both changed
     the same words differently, ours is kept and a Clash is reported."""
     # Windows line endings (older files, or a copy saved on Windows) are the same lines
     base, ours, theirs = (s.replace("\r\n", "\n") for s in (base, ours, theirs))
@@ -119,8 +144,11 @@ def merge_text(base: str, ours: str, theirs: str) -> tuple[str, list[Clash]]:
         if part[0] == "same":
             out += part[1]
             continue
+        if not part[1]:  # both added lines here
+            out += _both_added(part[2], part[3], theirs_first, "\n")
+            continue
         chunk_b, chunk_o, chunk_t = ("\n".join(c) for c in part[1:])
-        words = _merge_words(chunk_b, chunk_o, chunk_t)
+        words = _merge_words(chunk_b, chunk_o, chunk_t, theirs_first)
         if words is not None:
             out += words.split("\n")
         else:

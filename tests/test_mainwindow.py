@@ -508,8 +508,7 @@ def test_sync_comes_sooner_when_others_are_here(window, tmp_path, monkeypatch):
     assert read_manifest(package)["head"] == anna.history.head().decode()
 
 
-def test_live_editing(window, tmp_path, monkeypatch):
-    from PySide6.QtGui import QTextCursor
+def _two_live_windows(window, tmp_path, monkeypatch, doc="ch01"):
     from PySide6.QtWidgets import QMessageBox
 
     from screenwriter.sync import package_name
@@ -527,44 +526,104 @@ def test_live_editing(window, tmp_path, monkeypatch):
     ben.person_name = lambda: "Ben"
     ben.open_project_file(str(package), str(tmp_path / "ben"), keep_synced=True)
     for w in (anna, ben):
-        w.open_document("ch01")
-        w.live.timer.stop()  # ticks by hand below
-    ben._check_people(), anna._check_people(), ben._check_people()
+        w.open_document(doc)
+        for timer in (w.live.timer, w.sync_timer, w.presence_timer, w.quick_sync_timer):
+            timer.stop()  # ticks by hand below
+    return anna, ben
+
+
+def _type(editor, pos, text):
+    from PySide6.QtGui import QTextCursor
+
+    cursor = editor.textCursor()
+    cursor.setPosition(pos)
+    editor.setTextCursor(cursor)
+    for ch in text:  # a key at a time, as a person types
+        c = editor.textCursor()
+        c.insertText(ch)
+        editor.setTextCursor(c)
+
+
+def _exchange(anna, ben, rounds=2):
+    for _ in range(rounds):
+        anna.live.tick()
+        ben.live.tick()
+
+
+def test_live_editing(window, tmp_path, monkeypatch):
+    anna, ben = _two_live_windows(window, tmp_path, monkeypatch)
     a, b = anna.editors["ch01"], ben.editors["ch01"]
-    original = a.text()
-    paragraphs = original.split("\n")
-    first = next(i for i, p in enumerate(paragraphs) if p.startswith("Mara"))
-    second = next(i for i, p in enumerate(paragraphs) if p.startswith("The supply boat"))
+    _exchange(anna, ben)
+    assert anna.live.is_live("ch01") and ben.live.is_live("ch01")
+    assert anna.live.session.gen == ben.live.session.gen
 
-    # Anna works in the first paragraph, Ben adds to the second
-    cursor = a.textCursor()
-    cursor.setPosition(len("\n".join(paragraphs[:first + 1])))
-    a.setTextCursor(cursor)
-    a.textCursor().insertText(" Anna was here.")
+    # Anna adds to the first paragraph, Ben to the second, at the same time
+    first_end = a.text().index("father had used.") + len("father had used.")
+    _type(a, first_end, " Anna was here.")
     anna_cursor = a.textCursor().position()
-    b.replace_all(b.text().replace("brought a stranger.", "brought a stranger. Ben was here."))
-
-    ben.live.tick()  # Ben publishes
-    anna.live.tick()  # Anna takes it in
-    assert "Ben was here." in a.text() and "Anna was here." in a.text()
-    assert a.textCursor().position() == anna_cursor  # her cursor didn't jump
-    assert len(a.extraSelections()) == 1  # Ben's line is tinted…
-    labels = [c for c in a.viewport().children() if hasattr(c, "text") and c.text() == "Ben"]
-    assert labels  # …with his name
-
-    anna.live.tick()  # Anna publishes the merged text
-    ben.live.tick()  # Ben takes in Anna's sentence
+    second_end = b.text().index("brought a stranger.") + len("brought a stranger.")
+    _type(b, second_end, " Ben was here.")
+    _exchange(anna, ben)
     assert a.text() == b.text()
+    assert a.text().count("Anna was here.") == 1 and a.text().count("Ben was here.") == 1
+    assert a.textCursor().position() == anna_cursor  # Ben's words came in after it: her cursor stayed put
+    assert len(a.extraSelections()) == 1  # Ben's paragraph is tinted…
+    assert [c for c in a.viewport().children() if hasattr(c, "text") and c.text() == "Ben"]  # …with his name
 
-    # Ben's state on disk is now older than what Anna types next: it mustn't undo her new words
-    a.textCursor().insertText(" And more.")
-    anna.live._take_in(anna.live._reader.read(anna.session))
-    assert "And more." in a.text()
+    # both typing at the very same spot: every character arrives once, and both copies agree
+    end = a.text().index("Try both.]]") + len("Try both.]]")
+    _type(a, end, " aaa")
+    _type(b, b.text().index("Try both.]]") + len("Try both.]]"), " bbb")
+    _exchange(anna, ben)
+    assert a.text() == b.text()
+    tail = a.text()[end:]
+    assert tail.count("a") >= 3 and tail.count("b") >= 3
+
+    # deleting works too
+    start = a.text().index(" Anna was here.")
+    c = a.textCursor()
+    c.setPosition(start)
+    c.setPosition(start + len(" Anna was here."), c.MoveMode.KeepAnchor)
+    c.removeSelectedText()
+    _exchange(anna, ben)
+    assert "Anna was here." not in b.text() and a.text() == b.text()
+
+    # sync while live doesn't bring the same words in a second time
+    anna.sync_now(quiet=True)
+    ben.sync_now(quiet=True)
+    anna.sync_now(quiet=True)
+    _exchange(anna, ben)
+    assert a.text() == b.text() and a.text().count("Ben was here.") == 1
 
     # with live editing off, nothing flows
     anna.live.enabled = False
-    b.replace_all(b.text() + "\n\nOnly Ben.")
-    ben.live.tick()
-    anna.live.tick()
+    anna.live.leave()
+    _type(b, len(b.text()), "\n\nOnly Ben.")
+    _exchange(anna, ben)
     assert "Only Ben." not in a.text() and a.extraSelections() == []
+    dispose(ben)
+
+
+def test_live_editing_a_screenplay(window, tmp_path, monkeypatch):
+    anna, ben = _two_live_windows(window, tmp_path, monkeypatch, doc="pilot")
+    a, b = anna.editors["pilot"], ben.editors["pilot"]
+    _exchange(anna, ben)
+    _type(a, a.text().index("It's Thursday.") + len("It's Thursday."), " Again.")
+    _type(b, len(b.text()), "\n\nEXT. SEA - NIGHT\n\nThe boat is gone.")
+    _exchange(anna, ben)
+    assert a.text() == b.text()
+    assert "It's Thursday. Again." in b.text() and "The boat is gone." in a.text()
+    assert "EXT. SEA - NIGHT" in [line for line, _ in a.lines()]
+    dispose(ben)
+
+
+def test_joining_keeps_what_you_wrote_before(window, tmp_path, monkeypatch):
+    anna, ben = _two_live_windows(window, tmp_path, monkeypatch)
+    a, b = anna.editors["ch01"], ben.editors["ch01"]
+    # both type before they've seen each other
+    _type(a, a.text().index("father had used.") + len("father had used."), " Before Anna.")
+    _type(b, b.text().index("father had used.") + len("father had used."), " Before Ben.")
+    _exchange(anna, ben, rounds=3)
+    assert a.text() == b.text()
+    assert a.text().count("Before Anna.") == 1 and a.text().count("Before Ben.") == 1
     dispose(ben)

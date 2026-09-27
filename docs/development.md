@@ -36,7 +36,7 @@ SCREENWRITER_PROFILE=Anna uv run python -m screenwriter
 | `screenwriter/fountain.py` | Fountain parsing (Qt-free) |
 | `screenwriter/bible.py`, `board.py`, `diff.py` | story bible and boards (Qt-free models), word-level diffs for History |
 | `screenwriter/projecthistory.py` | project history: save points in `.history/` (git objects via dulwich) |
-| `screenwriter/live.py`, `liveedit.py` | live editing: per-window state files on the shared folder, merged in every second |
+| `screenwriter/live.py`, `liveedit.py` | live editing: each open document shared as a CRDT ([pycrdt](https://github.com/y-crdt/pycrdt), a Yjs port) through per-window state files on the shared folder |
 | `screenwriter/updates.py` | the Updates side panel: recent changes by others, read from history |
 | `screenwriter/people.py` | your name, colours, presence records (who has the project open, where) |
 | `screenwriter/sync.py`, `merge.py` | cloud-folder sync: `.screenwriter` package files, presence lock; paragraph and card merging, `conflicts.json` |
@@ -48,6 +48,13 @@ SCREENWRITER_PROFILE=Anna uv run python -m screenwriter
 
 Every editor offers the same small interface to the main window (`text`, `set_text`, `is_modified`,
 `mark_saved`, `stats`, `outline`, `search_text`, `reveal`, `jump_to_line`, …) — see `editors/common.py`.
+
+Live editing has a stress test that types into one document from two windows at once and checks nothing is
+lost, doubled or out of step (a few minutes; see its docstring for options):
+
+```bash
+uv run python tests/stress_live.py ch01 20
+```
 
 ## Screenshots
 

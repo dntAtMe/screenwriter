@@ -764,6 +764,11 @@ class MainWindow(QMainWindow):
             node = self.project.find(self._node_id_for(path))
             editor = self.editors.get(node.id) if node else None
             if isinstance(editor, (ProseEditor, ScreenplayEditor)):
+                if self.live.is_live(node.id):
+                    # being edited live: the others' typing arrives that way, not twice — and the
+                    # live text is what's true, so the file keeps it
+                    self.project.write_text(node, editor.text())
+                    continue
                 editor.apply_remote_text(self.project.read_text(node))  # keeps your cursor and scroll
                 editor.mark_saved()
             elif editor is not None and not isinstance(editor, CorkboardView):
