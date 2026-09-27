@@ -24,7 +24,7 @@ from dulwich.repo import Repo
 HISTORY_DIR = ".history"
 BRANCH = b"refs/heads/main"
 AUTO_MESSAGE = "Automatic save point"
-TRACKED_FILES = ("project.json", "conflicts.json", "dictionary.txt")
+TRACKED_FILES = ("project.json", "conflicts.json", "dictionary.txt", "comments.json")
 TRACKED_DIRS = ("docs",)
 FILE_MODE, DIR_MODE = 0o100644, 0o040000
 

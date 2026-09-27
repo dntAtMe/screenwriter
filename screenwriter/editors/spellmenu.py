@@ -1,5 +1,5 @@
-"""The spelling part of the editors' right-click menu: suggestions for a misspelled word
-(filled in when the background checker has them), Add to Project Dictionary, Ignore."""
+"""Parts of the editors' right-click menu: spelling (suggestions for a misspelled word, filled
+in when the background checker has them; Add to Project Dictionary; Ignore) and Add Comment."""
 
 from __future__ import annotations
 
@@ -70,3 +70,15 @@ def _disconnect(spell, slot) -> None:
         spell.suggestions.disconnect(slot)
     except (RuntimeError, TypeError):
         pass
+
+
+def add_comment_action(menu: QMenu, editor, on_comment: Callable[[], None]) -> None:
+    """"Add Comment…" at the top, when some text is selected."""
+    if not editor.textCursor().hasSelection():
+        return
+    first = menu.actions()[0] if menu.actions() else None
+    action = menu.addAction("Add Comment…")
+    action.triggered.connect(lambda: on_comment())
+    menu.insertAction(first, action)
+    if first is not None:
+        menu.insertSeparator(first)

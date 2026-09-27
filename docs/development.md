@@ -38,6 +38,7 @@ SCREENWRITER_PROFILE=Anna uv run python -m screenwriter
 | `screenwriter/projecthistory.py` | project history: save points in `.history/` (git objects via dulwich) |
 | `screenwriter/live.py`, `liveedit.py` | live editing: each open document shared as a CRDT ([pycrdt](https://github.com/y-crdt/pycrdt), a Yjs port) through per-window state files on the shared folder |
 | `screenwriter/updates.py` | the Updates side panel: recent changes by others, read from history |
+| `screenwriter/comments.py`, `commentspanel.py` | comments: anchored by their words (no markup in documents), `comments.json`, merged per comment and reply |
 | `screenwriter/spelling.py` | spell checking (spylls + the Hunspell dictionaries in `resources/dictionaries`), on a background thread |
 | `screenwriter/marks.py` | marked mentions: `{the hooded figure|Xardas}` and `[[HOODED FIGURE is Xardas]]` |
 | `screenwriter/people.py` | your name, colours, presence records (who has the project open, where) |

@@ -32,6 +32,8 @@ from . import merge, people
 from .formatbar import FormatBar
 from .liveedit import LiveEditing
 from .panes import TabArea
+from . import comments as notes
+from .commentspanel import CommentsPanel
 from . import spelling
 from .updates import UpdatesPanel, arrived, recent_updates
 from .quickopen import DoubleShift, QuickOpen, Target
@@ -152,6 +154,16 @@ class MainWindow(QMainWindow):
         self.updates.openRequested.connect(self.open_document)
         self.updates.historyRequested.connect(lambda path: self.show_history(path))
         self.side.addTab(self.updates, "Updates")
+        self.comments: list[notes.Comment] = []
+        self.comments_panel = CommentsPanel()
+        self.comments_panel._refresh = self._show_comments
+        self.comments_panel.addRequested.connect(self.add_comment)
+        self.comments_panel.jumpRequested.connect(self.go_to_comment)
+        self.comments_panel.replyRequested.connect(self.reply_to_comment)
+        self.comments_panel.resolveRequested.connect(self.resolve_comment)
+        self.comments_panel.deleteRequested.connect(self.delete_comment)
+        self.side.addTab(self.comments_panel, "Comments")
+        self.side.currentChanged.connect(lambda _: self._show_comments())
         self.side.currentChanged.connect(lambda _: self._refresh_updates())
         self.bible_index = bible.BibleIndex()
         self.bible_timer = QTimer(self, singleShot=True, interval=600)
@@ -165,7 +177,7 @@ class MainWindow(QMainWindow):
         self.splitter.addWidget(center)
         self.splitter.addWidget(self.side)
         self.splitter.setStretchFactor(1, 1)
-        self.splitter.setSizes([240, 900, 280])
+        self.splitter.setSizes([240, 860, 340])
 
         self.welcome = Welcome(self)
         self.stack = QStackedWidget()
@@ -310,6 +322,7 @@ class MainWindow(QMainWindow):
             self.project_actions.append(self._action(insert, label, lambda _=False, k=kind: self.binder.add(k), shortcut))
         insert.addSeparator()
         self.project_actions.append(self._action(insert, "Capture Idea…", self.capture_idea, "Ctrl+Shift+I"))
+        self.project_actions.append(self._action(insert, "Comment…", self.add_comment, "Ctrl+Shift+M"))
 
         fmt = bar.addMenu("F&ormat")
         self.element_actions = []
@@ -433,6 +446,7 @@ class MainWindow(QMainWindow):
         self._remember(project.path)
         self._refresh_bible()
         self._apply_spelling()
+        self._load_comments()
         self._update_conflicts_button()
         self.binder.set_unread(set(self.settings.value(f"unread/{project.id}", []) or []))
         self._refresh_updates()
@@ -461,6 +475,8 @@ class MainWindow(QMainWindow):
         self.sync_target = None
         self.sync_label.clear()
         self.conflicts_button.hide()
+        self.comments = []
+        self.comments_panel.set_comments([])
         self.binder.set_unread(set())
         self.updates.set_updates([], self.person_name(), None)
         self.side.setTabText(self.side.indexOf(self.updates), "Updates")
@@ -514,6 +530,7 @@ class MainWindow(QMainWindow):
             self._connect_bible_menu(editor)
             editor.spell = self.spell
             editor.addWordRequested.connect(self.add_spelling_word)
+            editor.commentRequested.connect(self.add_comment)
         elif node.kind in BIBLE_KINDS:
             editor = BibleEditor(node.kind, self._scan_documents)
             editor.nameChanged.connect(lambda name, i=node_id: self._rename_from_editor(i, name))
@@ -524,6 +541,7 @@ class MainWindow(QMainWindow):
             self._connect_bible_menu(editor.notes)
             editor.notes.highlighter.spell = self.spell
             editor.notes.addWordRequested.connect(self.add_spelling_word)
+            editor.notes.commentRequested.connect(self.add_comment)
         elif node.kind == BOARD:
             editor = BoardEditor(self._node_title)
             editor.openRequested.connect(self.open_document)
@@ -534,6 +552,7 @@ class MainWindow(QMainWindow):
             self._connect_bible_menu(editor)
             editor.highlighter.spell = self.spell
             editor.addWordRequested.connect(self.add_spelling_word)
+            editor.commentRequested.connect(self.add_comment)
         editor.node_id = node_id
         editor.set_text(self.project.read_text(node))
         editor.textChanged.connect(self.save_timer.start)
@@ -544,6 +563,7 @@ class MainWindow(QMainWindow):
         if isinstance(editor, ScreenplayEditor):
             editor.elementChanged.connect(lambda name, e=editor: self._update_element(e, name))
         self.editors[node_id] = editor
+        self._anchor_comments(node_id)
         index = self.tabs.addTab(editor, node.title)  # no icon: the macOS style elides titles of tabs with icons
         self.tabs.setCurrentIndex(index)
         editor.setFocus()
@@ -551,6 +571,7 @@ class MainWindow(QMainWindow):
     def save_all(self) -> None:
         if self.project is None:
             return
+        self._save_comment_positions()
         for node_id, editor in self.editors.items():
             if editor.is_modified():
                 node = self.project.find(node_id)
@@ -777,6 +798,8 @@ class MainWindow(QMainWindow):
         """Show what sync changed on disk: the binder, and any open documents."""
         if "dictionary.txt" in changed:
             self._refresh_known_words()
+        if notes.COMMENTS_FILE in changed:
+            self._load_comments(arrived=True)
         if "project.json" in changed:
             self.project = Project.open(self.project.path)
             self._apply_spelling()
@@ -810,6 +833,156 @@ class MainWindow(QMainWindow):
         """"Screenwriter", or "Screenwriter (Anna)" for a second copy run with SCREENWRITER_PROFILE."""
         name = QApplication.applicationName()
         return name if name.startswith(APP_NAME) else APP_NAME
+
+    # --- comments -------------------------------------------------------------------------
+
+    def _comment_editor(self, node_id: str):
+        editor = self.editors.get(node_id)
+        if isinstance(editor, BibleEditor):
+            editor = editor.notes
+        return editor if isinstance(editor, (ProseEditor, ScreenplayEditor)) else None
+
+    def _load_comments(self, arrived: bool = False) -> None:
+        """Read comments.json (again), and show where they are in the open documents."""
+        if self.project is None:
+            return
+        before = {c.id: len(c.replies) for c in self.comments}
+        self.comments = notes.load(self.project.path)
+        for node_id in self.editors:
+            self._anchor_comments(node_id)
+        me = self.person_name()
+        fresh = [c for c in self.comments if c.author != me and c.id not in before] + [
+            c for c in self.comments if c.id in before and len(c.replies) > before[c.id]
+            and c.replies[-1].author != me]
+        if arrived and fresh:
+            self.statusBar().showMessage(
+                f"New comment from {fresh[-1].replies[-1].author if fresh[-1].id in before else fresh[-1].author}", 8000)
+            index = self.side.indexOf(self.comments_panel)
+            if self.side.currentWidget() is not self.comments_panel:
+                self.side.setTabText(index, "Comments •")
+        self._show_comments()
+
+    def _save_comments(self) -> None:
+        notes.save(self.project.path, self.comments)
+        self._show_comments()
+
+    def _anchor_comments(self, node_id: str, active: str | None = None) -> None:
+        editor = self._comment_editor(node_id)
+        if editor is None:
+            return
+        text = editor.text()
+        found = {}
+        for c in self.comments:
+            if c.doc == node_id and not c.resolved and (span := c.find(text)):
+                found[c.id] = span
+        editor.set_comment_anchors(found, active)
+
+    def _save_comment_positions(self) -> None:
+        """Remember where each comment's words have moved to (as the documents are saved)."""
+        if not self.comments:
+            return
+        by_id = {c.id: c for c in self.comments}
+        moved = False
+        for node_id in self.editors:
+            editor = self._comment_editor(node_id)
+            if editor is None:
+                continue
+            text = editor.text()
+            for start, end, comment_id in editor.comment_spans():
+                if (c := by_id.get(comment_id)) is not None and c.anchor(text, start, end):
+                    moved = True
+        if moved:
+            notes.save(self.project.path, self.comments)
+
+    def _show_comments(self) -> None:
+        if self.project is None:
+            return
+        panel = self.comments_panel
+        editor = self.tabs.currentWidget()
+        node_id = getattr(editor, "node_id", None)
+        shown = []
+        for c in self.comments:
+            if c.resolved and not panel.show_resolved.isChecked():
+                continue
+            if panel.scope.currentIndex() == panel.THIS and c.doc != node_id:
+                continue
+            node = self.project.find(c.doc)
+            text = self._text_of(node) if node else ""
+            shown.append((c, node.title if node else "(deleted document)", c.resolved or c.find(text) is not None))
+        doc_editor = self._comment_editor(node_id) if node_id else None
+        panel.set_comments(shown, doc_editor.active_comment() if doc_editor else None)
+        panel.add.setEnabled(doc_editor is not None)
+        if self.side.currentWidget() is panel:
+            self.side.setTabText(self.side.indexOf(panel), "Comments")
+
+    def add_comment(self) -> None:
+        editor = self.tabs.currentWidget()
+        node_id = getattr(editor, "node_id", None)
+        text_editor = self._comment_editor(node_id) if node_id else None
+        if text_editor is None or not text_editor.textCursor().hasSelection():
+            QMessageBox.information(self, "Add Comment", "Select the text you want to comment on first.")
+            return
+        cursor = text_editor.textCursor()
+        start, end = sorted((cursor.anchor(), cursor.position()))
+        text = text_editor.text()
+        quote = text[start:end]
+        body, ok = QInputDialog.getMultiLineText(
+            self, "Add Comment", f"On “{quote if len(quote) <= 60 else quote[:57] + '…'}”:")
+        if not ok or not body.strip():
+            return
+        comment = notes.Comment.new(node_id, text, start, end, self.person_name(), body.strip())
+        self.comments.append(comment)
+        notes.save(self.project.path, self.comments)
+        self._anchor_comments(node_id, active=comment.id)
+        self.side.show()
+        self.side.setCurrentWidget(self.comments_panel)
+        self._show_comments()
+        if self.sync_target:
+            self.quick_sync_timer.start()
+
+    def _comment(self, comment_id: str):
+        return next((c for c in self.comments if c.id == comment_id), None)
+
+    def go_to_comment(self, comment_id: str) -> None:
+        c = self._comment(comment_id)
+        if c is None or self.project.find(c.doc) is None:
+            return
+        self.open_document(c.doc)
+        self._anchor_comments(c.doc, active=c.id)
+        editor = self._comment_editor(c.doc)
+        span = next(((s, e) for s, e, i in editor.comment_spans() if i == c.id), None) or c.find(editor.text())
+        if span:
+            editor.reveal(span[0], span[1] - span[0])
+        self._show_comments()
+
+    def reply_to_comment(self, comment_id: str, text: str) -> None:
+        if (c := self._comment(comment_id)) is not None:
+            c.replies.append(notes.Reply(notes.uuid.uuid4().hex[:12], self.person_name(), text, notes.now()))
+            self._save_comments()
+            self.comments_panel.focus_reply(comment_id)
+            if self.sync_target:
+                self.quick_sync_timer.start()
+
+    def resolve_comment(self, comment_id: str, resolved: bool) -> None:
+        if (c := self._comment(comment_id)) is not None:
+            c.resolved, c.resolved_by = resolved, self.person_name() if resolved else ""
+            self._save_comments()
+            self._anchor_comments(c.doc)
+            if self.sync_target:
+                self.quick_sync_timer.start()
+
+    def delete_comment(self, comment_id: str) -> None:
+        c = self._comment(comment_id)
+        if c is None:
+            return
+        if QMessageBox.question(self, "Delete Comment", "Delete this comment and its replies, for everyone?") \
+                != QMessageBox.StandardButton.Yes:
+            return
+        self.comments.remove(c)
+        self._save_comments()
+        self._anchor_comments(c.doc)
+        if self.sync_target:
+            self.quick_sync_timer.start()
 
     # --- spelling -------------------------------------------------------------------------
 
@@ -999,7 +1172,10 @@ class MainWindow(QMainWindow):
         titles = [n.title for n in nodes]
         what = and_list(titles[:3] + ([f"{len(titles) - 3} more"] if len(titles) > 3 else []))
         names = and_list(who)
-        self.statusBar().showMessage(f"{names} changed {what}" if titles else f"Brought in changes from {names}", 8000)
+        if titles:
+            self.statusBar().showMessage(f"{names} changed {what}", 8000)
+        elif notes.COMMENTS_FILE not in result.changed:  # (a new comment has said so already)
+            self.statusBar().showMessage(f"Brought in changes from {names}", 8000)
         self._refresh_updates()
 
     def _refresh_updates(self) -> None:
@@ -1279,6 +1455,7 @@ class MainWindow(QMainWindow):
         self._update_format_bar()
         self._update_banner()
         self.spell_redraw.start()
+        self._show_comments()
         if editor is not None and editor.node_id in self.binder.unread:
             self._set_unread(self.binder.unread - {editor.node_id})
         if self.sync_target:

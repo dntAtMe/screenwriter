@@ -44,13 +44,14 @@ from ..fountain import AFTER_BREAK, EL_NAMES, IN_DIALOGUE, SCENE_PREFIXES, SCENE
 from ..bible import BibleIndex
 from ..marks import MARK_RE
 from .biblemenu import add_bible_menu, add_cue_menu, add_mark_menu
-from .spellmenu import add_spelling_menu
+from .spellmenu import add_comment_action, add_spelling_menu
 from .history import TextHistory
 from .common import (
     TextDocumentAPI,
     center_column,
     first_available_font,
     paint_margins_as_page,
+    highlight_comments,
     underline_misspelled,
     word_count,
 )
@@ -148,6 +149,7 @@ class FountainHighlighter(QSyntaxHighlighter):
             self.setFormat(len(text) - len(stripped), 1, _fmt(color=self.GREY))
         if el != El.TITLE_PAGE:
             underline_misspelled(self, text, self.editor.spell)
+        highlight_comments(self, text)
 
 
 class ScreenplayEditor(TextDocumentAPI, QTextEdit):
@@ -157,6 +159,7 @@ class ScreenplayEditor(TextDocumentAPI, QTextEdit):
     bibleAddRequested = Signal(str, str)  # kind, selected text
     bibleAliasRequested = Signal(str, str)  # entry node id, selected text
     addWordRequested = Signal(str)  # to the project dictionary
+    commentRequested = Signal()  # on the selected text
     bible_index = BibleIndex()  # set by the main window
     spell = None  # the SpellService, set by the main window
 
@@ -183,6 +186,8 @@ class ScreenplayEditor(TextDocumentAPI, QTextEdit):
         self._applying = False
         self._laid_out_unit = 0.0  # indent per character at the last layout
         self.highlighter = FountainHighlighter(self)
+        self.highlighter.comment_spans = self.comment_spans
+        self.highlighter.active_comment = self.active_comment
 
         # Edits that don't come through keyPressEvent (paste, drop, undo) get a full refresh.
         self._refresh_timer = QTimer(self, singleShot=True, interval=0)
@@ -649,6 +654,7 @@ class ScreenplayEditor(TextDocumentAPI, QTextEdit):
         if el == El.CHARACTER and target and target[1] and not self.bible_lookup("character", target[1]):
             add_cue_menu(menu, self, target[1], self.bible_index)
         add_spelling_menu(menu, self, self.spell, self.cursorForPosition(e.pos()).position(), self.addWordRequested.emit)
+        add_comment_action(menu, self, self.commentRequested.emit)
         menu.exec(e.globalPos())
 
     # --- completion -------------------------------------------------------------

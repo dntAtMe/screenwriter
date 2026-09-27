@@ -25,6 +25,30 @@ def underline_misspelled(highlighter, text: str, spell) -> None:
                 highlighter.setFormat(i, 1, f)
 
 
+COMMENT_TINT = (240, 200, 60)  # a soft yellow behind commented text
+
+
+def highlight_comments(highlighter, text: str) -> None:
+    """Tint the commented stretches of the block being highlighted (the selected comment more)."""
+    spans = getattr(highlighter, "comment_spans", None)
+    if spans is None:
+        return
+    from PySide6.QtGui import QColor
+
+    block_start = highlighter.currentBlock().position()
+    active = getattr(highlighter, "active_comment", lambda: None)()
+    for start, end, comment_id in spans():
+        lo, hi = max(start - block_start, 0), min(end - block_start, len(text))
+        if lo >= hi:
+            continue
+        tint = QColor(*COMMENT_TINT)
+        tint.setAlpha(110 if comment_id == active else 55)
+        for i in range(lo, hi):
+            f = highlighter.format(i)
+            f.setBackground(tint)
+            highlighter.setFormat(i, 1, f)
+
+
 def word_at(editor, pos: int):
     """(start, end, word) of the checkable word around a document position, or None."""
     block = editor.document().findBlock(pos)
@@ -112,6 +136,34 @@ class TextDocumentAPI:
         change(cursor)
         cursor.endEditBlock()
         self.setTextCursor(cursor)
+
+    # --- comments: the stretches of text they're on follow the words as they're edited ---
+
+    def set_comment_anchors(self, found: dict, active: str | None = None) -> None:
+        """{comment id: (start, end)} of the comments on this document."""
+        self._comment_cursors = {}
+        for comment_id, (start, end) in found.items():
+            cursor = QTextCursor(self.document())
+            cursor.setPosition(min(start, self.document().characterCount() - 1))
+            cursor.setPosition(min(end, self.document().characterCount() - 1), QTextCursor.MoveMode.KeepAnchor)
+            self._comment_cursors[comment_id] = cursor
+        self._active_comment = active
+        self.highlighter.rehighlight()
+
+    def comment_spans(self) -> list[tuple[int, int, str]]:
+        """(start, end, comment id) where each comment's words are now (gone ones left out)."""
+        out = []
+        for comment_id, c in getattr(self, "_comment_cursors", {}).items():
+            start, end = sorted((c.anchor(), c.position()))
+            if end > start:
+                out.append((start, end, comment_id))
+        return out
+
+    def active_comment(self) -> str | None:
+        return getattr(self, "_active_comment", None)
+
+    def comment_at(self, pos: int) -> str | None:
+        return next((i for s, e, i in self.comment_spans() if s <= pos <= e), None)
 
     def selected_text(self) -> str:
         text = self.textCursor().selectedText()

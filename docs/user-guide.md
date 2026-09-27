@@ -292,6 +292,20 @@ Nothing is ever overwritten, and every sync is in the project's history, so it c
 Keep the **project folder itself outside** the cloud folder (for example in Documents) — sync goes through the
 single `.screenwriter` file. To stop, **File → Sync & Backup… → Stop Syncing**; the project stays where it is.
 
+### Comments
+
+Select some text and **right-click → Add Comment…** (or **Insert → Comment…**, `Ctrl+Shift+M`). The commented
+text gets a soft yellow background, and the comment appears in the **Comments** tab of the side panel, with
+your name and the time.
+
+- Anyone can **reply** (type in the box under a comment and press `Enter`), **Resolve** it when it's dealt with
+  (it's hidden, with its highlight, until you tick **Resolved**), or **Delete** it.
+- Click a comment to jump to its text. **This document** / **All documents** chooses which are listed.
+- Comments don't add anything to the document itself — nothing to tidy up, nothing in exports. They follow their
+  words as the text is edited; if the words are deleted, the comment stays, marked *text no longer found*.
+- They sync with the project: others see new comments and replies after the next sync (a few seconds while
+  you're both in the project), and the tab shows a dot until you look.
+
 ### Writing together
 
 Several people can work on one project through a **shared folder** — a network drive, or a Dropbox, OneDrive or
@@ -413,6 +427,7 @@ press the key you want, or let go, and it disappears. With `Alt` it also shows t
 | Board / Folder | `Ctrl+Alt+B` / `Ctrl+Shift+G` |
 | Character / Location | `Ctrl+Alt+C` / `Ctrl+Alt+L` |
 | Capture an idea | `Ctrl+Shift+I` |
+| Comment on the selection | `Ctrl+Shift+M` |
 | **Editing** | |
 | Undo / Redo | `Ctrl+Z` / `Ctrl+Shift+Z` (`Ctrl+Y` on Windows) |
 | Find / next / previous | `Ctrl+F` / `Ctrl+G` / `Ctrl+Shift+G` (`F3` / `Shift+F3` on Windows) |

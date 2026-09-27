@@ -36,6 +36,7 @@ from dulwich.client import LocalGitClient
 from dulwich.graph import find_merge_base
 from dulwich.repo import Repo
 
+from .comments import COMMENTS_FILE, merge as merge_comments, parse as parse_comments
 from .merge import CONFLICTS_FILE, ConflictRecord, dump_conflicts, merge_board, merge_conflict_lists, merge_text
 from .projecthistory import BRANCH, HISTORY_DIR, ProjectHistory
 
@@ -180,7 +181,11 @@ def merge_files(base: dict[str, bytes], ours: dict[str, bytes], theirs: dict[str
     conflicts: list[Conflict] = []
     copies: dict[str, str] = {}  # our doc id -> id of their conflicting copy
     records = merge_conflict_lists(base.get(CONFLICTS_FILE), ours.get(CONFLICTS_FILE), theirs.get(CONFLICTS_FILE))
-    for path in sorted((set(base) | set(ours) | set(theirs)) - {BINDER, CONFLICTS_FILE}):
+    if any(COMMENTS_FILE in files for files in (base, ours, theirs)):  # everyone's comments and replies
+        comments = merge_comments(base.get(COMMENTS_FILE), ours.get(COMMENTS_FILE), theirs.get(COMMENTS_FILE))
+        if parse_comments(comments):  # (none left: no file)
+            merged[COMMENTS_FILE] = comments
+    for path in sorted((set(base) | set(ours) | set(theirs)) - {BINDER, CONFLICTS_FILE, COMMENTS_FILE}):
         b, o, t = base.get(path), ours.get(path), theirs.get(path)
         if o == t or t == b:
             result = o

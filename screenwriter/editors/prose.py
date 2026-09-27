@@ -15,12 +15,13 @@ from ..bible import CHARACTER, BibleIndex
 from ..fountain import OutlineItem
 from ..marks import MARK_RE
 from .biblemenu import add_bible_menu, add_mark_menu
-from .spellmenu import add_spelling_menu
+from .spellmenu import add_comment_action, add_spelling_menu
 from .common import (
     TextDocumentAPI,
     center_column,
     first_available_font,
     paint_margins_as_page,
+    highlight_comments,
     underline_misspelled,
     word_count,
 )
@@ -71,6 +72,7 @@ class MarkdownHighlighter(QSyntaxHighlighter):
             self.setFormat(0, len(text), _fmt(bold=True, scale=scale, base=self.base_font))
             self.setFormat(0, level, self.formats["marker"])
             underline_misspelled(self, text, self.spell)
+            highlight_comments(self, text)
             return
         if text.startswith(">"):
             self.setFormat(0, len(text), self.formats["quote"])
@@ -88,6 +90,7 @@ class MarkdownHighlighter(QSyntaxHighlighter):
                 f.setUnderlineColor(QColor(BIBLE_COLORS.get(entry.kind, "#888")))
                 self.setFormat(i, 1, f)
         underline_misspelled(self, text, self.spell)
+        highlight_comments(self, text)
 
 
 HEADING_RE = re.compile(r"^(#{1,6})\s+(.*)")
@@ -107,6 +110,7 @@ class ProseEditor(TextDocumentAPI, QPlainTextEdit):
     bibleAddRequested = Signal(str, str)  # kind, name
     bibleAliasRequested = Signal(str, str)  # entry node id, another name for it
     addWordRequested = Signal(str)  # to the project dictionary
+    commentRequested = Signal()  # on the selected text
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -115,6 +119,8 @@ class ProseEditor(TextDocumentAPI, QPlainTextEdit):
         font.setPointSizeF(17)
         self.setFont(font)
         self.highlighter = MarkdownHighlighter(self.document(), font)
+        self.highlighter.comment_spans = self.comment_spans
+        self.highlighter.active_comment = self.active_comment
         paint_margins_as_page(self)
         self.textChanged.connect(self.statsChanged)
         self.selectionChanged.connect(self.statsChanged)
@@ -188,6 +194,7 @@ class ProseEditor(TextDocumentAPI, QPlainTextEdit):
         add_mark_menu(menu, self, self.bible, self.cursorForPosition(e.pos()).position())
         add_spelling_menu(menu, self, self.highlighter.spell, self.cursorForPosition(e.pos()).position(),
                           self.addWordRequested.emit)
+        add_comment_action(menu, self, self.commentRequested.emit)
         if entry:
             first = menu.actions()[0]
             action = menu.addAction(f"Open “{entry.name}” in Story Bible")

@@ -7,6 +7,9 @@ All notable changes to Screenwriter are listed here. The format follows
 ## [Unreleased]
 
 ### Added
+- **Comments**: select text and add a comment (`Ctrl+Shift+M`); reply, resolve and delete in the new **Comments**
+  tab. Commented text is highlighted, comments follow their words as the text changes, and they sync — everyone's
+  comments and replies are kept when copies merge.
 - **Spell checking** in Polish and English (US / UK): red squiggles, suggestions and a project dictionary shared
   through sync; languages per project (**Edit → Spelling**), Story Bible names always accepted.
 - **Mentions before a character is named**: mark a description (“the hooded figure”) as a Story Bible character
