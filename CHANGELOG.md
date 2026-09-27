@@ -6,6 +6,8 @@ All notable changes to Screenwriter are listed here. The format follows
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-09-27
+
 ### Added
 - **Comments**: select text and add a comment (`Ctrl+Shift+M`); reply, resolve and delete in the new **Comments**
   tab. Commented text is highlighted, comments follow their words as the text changes, and they sync — everyone's
@@ -128,7 +130,8 @@ The first release.
 - Packages for macOS (`.dmg`), Windows (installer and portable `.zip`) and Linux (`.AppImage`, `.tar.gz`).
 - Released under the MIT License.
 
-[Unreleased]: https://github.com/dntAtMe/screenwriter/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/dntAtMe/screenwriter/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/dntAtMe/screenwriter/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/dntAtMe/screenwriter/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/dntAtMe/screenwriter/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/dntAtMe/screenwriter/compare/v0.3.0...v0.3.1
