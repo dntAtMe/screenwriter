@@ -8,6 +8,7 @@ from PySide6.QtCore import QSettings
 from PySide6.QtWidgets import QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout, QLabel, QMessageBox
 
 from .board import Board
+from .marks import strip_marks
 from .export import Format
 from .export import manuscript, screenplay
 from .project import BOARD, FOLDER, NOTE, PROSE, SCREENPLAY, Node, Project, walk
@@ -20,7 +21,7 @@ def export_formats(project: Project, node: Node, text_of) -> tuple[str, list[For
         return f"Screenplay “{node.title}”", [
             Format("PDF (screenplay format)", "pdf", True, lambda p, paper: screenplay.write_pdf(text, p, paper, node.title)),
             Format("Final Draft (.fdx)", "fdx", False, lambda p, paper: Path(p).write_text(screenplay.to_fdx(text), encoding="utf-8")),
-            Format("Fountain (.fountain)", "fountain", False, lambda p, paper: Path(p).write_text(text, encoding="utf-8")),
+            Format("Fountain (.fountain)", "fountain", False, lambda p, paper: Path(p).write_text(strip_marks(text), encoding="utf-8")),
         ]
     if node.kind == BOARD:
         text = text_of(node)

@@ -144,6 +144,24 @@ location. Click a line to jump there. It refreshes when you switch to the entry,
 locations). Hover a name to see its description, and **Ctrl-click** (`⌘`-click) it to open the entry. Names are
 suggested while you type a capitalised word, in prose as well as scripts.
 
+### Before a character is named
+
+A character often appears as a description first — *the hooded figure* — long before the story reveals it's
+Xardas. Mark those mentions so they still count as Xardas:
+
+- **Select the description, right-click → “the hooded figure” is… → Xardas.** Only that mention is marked;
+  *the hooded figure* elsewhere can still be someone else. If the same words appear more than once in the
+  document, **Every “the hooded figure” here is…** marks them all at once. Right-click a marked one to
+  **Remove mark**.
+- In the text it's kept as `{the hooded figure|Xardas}`: the braces and the name are shown small and grey, the
+  description is underlined in the character's colour, and hovering shows who it is. Exports print just *the
+  hooded figure*, and the hidden name doesn't count towards word counts.
+- **In a script**, a character can speak under a description cue — `HOODED FIGURE`. Right-click the cue →
+  **HOODED FIGURE in this script is… → Xardas**. This adds a note, `[[HOODED FIGURE is Xardas]]`, at the end of
+  the script (notes are never printed); the cue stays as written, and those lines count as Xardas's speeches.
+
+Marked mentions show up in the character's **Appears in** list and in the **Cast** panel like any other.
+
 ## Boards: mind maps
 
 A **board** (`Ctrl+Alt+B`) is a canvas of cards — for brainstorming, plot maps, relationship maps.

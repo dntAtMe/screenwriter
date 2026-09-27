@@ -6,6 +6,12 @@ All notable changes to Screenwriter are listed here. The format follows
 
 ## [Unreleased]
 
+### Added
+- **Mentions before a character is named**: mark a description (“the hooded figure”) as a Story Bible character
+  from the right-click menu — one mention, or every one in the document — and a script's description cue
+  (HOODED FIGURE) as that character for the whole script. They count in **Appears in** and the **Cast** panel,
+  and print as written.
+
 ## [0.5.0] - 2026-09-27
 
 ### Added

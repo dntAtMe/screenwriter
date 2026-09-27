@@ -20,6 +20,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
+from .marks import MARK_RE, Mention, masked, stands_for, strip_marks
 from .fountain import El, character_name, parse
 
 CHARACTER, LOCATION = "character", "location"
@@ -145,6 +146,12 @@ def _name_re(names: list[str]) -> re.Pattern | None:
 Document = tuple[str, str, str, str]
 
 
+def _is_wanted(name: str, wanted: set[str]) -> bool:
+    """Whether a name (from a mark or an "is" note) is one of the entry's names, "stem*" forms too."""
+    name = name.strip().upper()
+    return name in wanted or any(w.endswith("*") and name.startswith(w[:-1]) for w in wanted)
+
+
 def character_report(names: list[str], docs: list[Document]) -> Report:
     report = Report()
     wanted = {n.upper() for n in names}
@@ -154,8 +161,8 @@ def character_report(names: list[str], docs: list[Document]) -> Report:
     for doc_id, title, kind, text in docs:
         if kind == "screenplay":
             _scan_script(report, wanted, finder, doc_id, title, text)
-        elif finder:
-            _scan_prose(report, finder, doc_id, title, text)
+        else:
+            _scan_prose(report, finder, doc_id, title, text, wanted)
     return report
 
 
@@ -172,11 +179,14 @@ def _scan_script(report, wanted, finder, doc_id, title, text) -> None:
     offsets = _line_offsets(text)
     heading, heading_line = "(before the first scene)", -1
     speaking = False
+    # cues that stand for this character in this script: [[HOODED FIGURE is Xardas]]
+    cues = {cue.upper() for cue, name in stands_for(text).items() if _is_wanted(name, wanted)}
     for i, (line, el) in enumerate(lines):
         if el == El.SCENE:
             heading, heading_line = line.strip().lstrip(".").upper(), i
         if el == El.CHARACTER:
-            speaking = character_name(line).upper() in wanted
+            cue = character_name(line).upper()
+            speaking = cue in wanted or cue in cues
             if speaking:
                 report.speeches += 1
                 report.scenes.add((doc_id, heading_line))
@@ -187,25 +197,35 @@ def _scan_script(report, wanted, finder, doc_id, title, text) -> None:
             continue
         if el not in (El.PARENTHETICAL, El.DIALOGUE):
             speaking = False
-        if el in (El.ACTION, El.SCENE) and finder and (m := finder.search(line)):
-            report.scenes.add((doc_id, heading_line))
-            report.appearances.append(
-                Appearance(doc_id, title, offsets[i] + m.start(), m.end() - m.start(), i, _snippet(line, m))
-            )
+        if el in (El.ACTION, El.SCENE):
+            m = next(_marked(line, wanted), None) or (finder.search(masked(line)) if finder else None)
+            if m:
+                report.scenes.add((doc_id, heading_line))
+                report.appearances.append(
+                    Appearance(doc_id, title, offsets[i] + m.start(), m.end() - m.start(), i, _snippet(line, m))
+                )
 
 
-def _scan_prose(report, finder, doc_id, title, text) -> None:
+def _marked(line: str, wanted: set[str]):
+    """Mentions marked as this entry in a line: {the hooded figure|Xardas}."""
+    for m in MARK_RE.finditer(line):
+        if _is_wanted(m.group(2), wanted):
+            yield Mention(m.start(1), m.end(1), m.group(1))
+
+
+def _scan_prose(report, finder, doc_id, title, text, wanted: set[str] = frozenset()) -> None:
     offsets = _line_offsets(text)
     for i, line in enumerate(text.split("\n")):
-        for m in finder.finditer(line):
+        found = list(_marked(line, wanted)) + (list(finder.finditer(masked(line))) if finder else [])
+        for m in sorted(found, key=lambda m: m.start()):
             report.appearances.append(
                 Appearance(doc_id, title, offsets[i] + m.start(), m.end() - m.start(), i, _snippet(line, m))
             )
 
 
-def _snippet(line: str, m: re.Match, width: int = 40) -> str:
+def _snippet(line: str, m, width: int = 40) -> str:
     start, end = max(0, m.start() - width), min(len(line), m.end() + width)
-    return ("…" if start else "") + line[start:end].strip() + ("…" if end < len(line) else "")
+    return ("…" if start else "") + strip_marks(line[start:end]).strip() + ("…" if end < len(line) else "")
 
 
 def location_report(names: list[str], docs: list[Document]) -> Report:
@@ -214,9 +234,10 @@ def location_report(names: list[str], docs: list[Document]) -> Report:
     finder = _name_re(names)
     if not finder:
         return report
+    wanted = {n.upper() for n in names}
     for doc_id, title, kind, text in docs:
         if kind != "screenplay":
-            _scan_prose(report, finder, doc_id, title, text)
+            _scan_prose(report, finder, doc_id, title, text, wanted)
             continue
         offsets = _line_offsets(text)
         for i, (line, el) in enumerate(parse(text)):
@@ -284,12 +305,22 @@ class BibleIndex:
         return next((e for stem, e in self._stems if text.startswith(stem)), None)
 
     def find(self, text: str):
-        """(match, entry) for every mention in text."""
-        if self.regex is None:
+        """(match, entry) for every mention in text: names, marked descriptions
+        ({the hooded figure|Xardas}), and what a document's [[X is Name]] notes stand for."""
+        if not self.entries:
             return
-        for m in self.regex.finditer(text):
-            if entry := self.lookup(m.group(0)):
-                yield m, entry
+        for m in MARK_RE.finditer(text):
+            if entry := self.lookup(m.group(2).strip()):
+                yield Mention(m.start(1), m.end(1), m.group(1)), entry
+        plain = masked(text)
+        if self.regex is not None:
+            for m in self.regex.finditer(plain):
+                if entry := self.lookup(m.group(0)):
+                    yield m, entry
+        for what, name in stands_for(text).items():
+            if entry := self.lookup(name):
+                for m in re.finditer(rf"(?<!\w){re.escape(what)}(?!\w)", plain):
+                    yield m, entry
 
     def completions(self) -> list[str]:
         """Names as they'd be written in prose: 'Mara Quinn', 'Mara', 'the keeper'."""

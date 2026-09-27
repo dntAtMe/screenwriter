@@ -3,11 +3,13 @@ import re
 from PySide6.QtGui import QFontDatabase, QPalette, QTextCursor
 from PySide6.QtWidgets import QAbstractScrollArea
 
+from ..marks import strip_marks
+
 WORD_RE = re.compile(r"[\w'’-]+")
 
 
 def word_count(text: str) -> int:
-    return len(WORD_RE.findall(text))
+    return len(WORD_RE.findall(strip_marks(text)))  # a mark's name isn't a word you wrote
 
 
 def first_available_font(*families: str) -> str:

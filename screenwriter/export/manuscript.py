@@ -8,13 +8,15 @@ from __future__ import annotations
 
 import re
 
+from ..marks import strip_marks
+
 NOTE_RE = re.compile(r"\[\[.*?\]\]", re.DOTALL)
 SCENE_BREAK_RE = re.compile(r"^\s*(\*\s*\*\s*\*|-{3,}|#)\s*$")
 INLINE_RE = re.compile(r"(\*\*[^*]+\*\*|__[^_]+__|\*[^*\s][^*]*\*|_[^_\s][^_]*_)")
 
 
 def clean(text: str) -> str:
-    text = NOTE_RE.sub("", text)
+    text = strip_marks(NOTE_RE.sub("", text))  # {the hooded figure|Xardas} prints as the phrase
     text = "\n".join(line.rstrip() for line in text.splitlines())
     return re.sub(r"\n{3,}", "\n\n", text).strip()
 

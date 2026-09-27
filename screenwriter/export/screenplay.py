@@ -13,6 +13,7 @@ import re
 from dataclasses import dataclass, field
 from xml.sax.saxutils import escape, quoteattr
 
+from ..marks import strip_marks
 from ..fountain import EXTENSION_RE, El, parse, title_page
 
 # (indent, width) in characters from the left margin, on a 60-character line
@@ -98,7 +99,7 @@ def emphasis(text: str) -> Styled:
 
 def clean(text: str, el: El) -> Styled:
     """Printable text for one line: no notes, emphasis marks or forcing marks."""
-    s = emphasis(NOTE_RE.sub("", text).strip())
+    s = emphasis(strip_marks(NOTE_RE.sub("", text)).strip())  # marks print as their phrase
     if el == El.CENTERED:
         s = s.lstrip(">").rstrip("<").strip()
     elif s[:1] in ".!@>" and not s.startswith("..") and el in (El.SCENE, El.ACTION, El.CHARACTER, El.TRANSITION):

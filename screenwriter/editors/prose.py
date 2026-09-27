@@ -13,7 +13,8 @@ from PySide6.QtWidgets import QCompleter, QFrame, QPlainTextEdit, QToolTip
 
 from ..bible import CHARACTER, BibleIndex
 from ..fountain import OutlineItem
-from .biblemenu import add_bible_menu
+from ..marks import MARK_RE
+from .biblemenu import add_bible_menu, add_mark_menu
 from .common import TextDocumentAPI, center_column, first_available_font, paint_margins_as_page, word_count
 
 COLUMN_CHARS = 70
@@ -66,6 +67,10 @@ class MarkdownHighlighter(QSyntaxHighlighter):
         for regex, name in self.INLINE:
             for m in regex.finditer(text):
                 self.setFormat(m.start(), m.end() - m.start(), self.formats[name])
+        tag = _fmt(color="#a0a4ab", scale=0.72, base=self.base_font)  # (follows zoom)
+        for m in MARK_RE.finditer(text):  # {the hooded figure|Xardas}: the tag faint, the phrase as written
+            self.setFormat(m.start(), 1, tag)
+            self.setFormat(m.end(1), m.end() - m.end(1), tag)
         for m, entry in self.bible.find(text):
             for i in range(m.start(), m.end()):  # keep bold/italic, add the underline
                 f = self.format(i)
@@ -168,6 +173,7 @@ class ProseEditor(TextDocumentAPI, QPlainTextEdit):
         # a selection that isn't exactly a known name can still be added (e.g. "Kacprowi")
         if name and (entry is None or self.textCursor().hasSelection()):
             add_bible_menu(menu, name, self.bible, self.bibleAddRequested.emit, self.bibleAliasRequested.emit)
+        add_mark_menu(menu, self, self.bible, self.cursorForPosition(e.pos()).position())
         if entry:
             first = menu.actions()[0]
             action = menu.addAction(f"Open “{entry.name}” in Story Bible")

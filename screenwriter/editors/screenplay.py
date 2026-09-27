@@ -42,7 +42,8 @@ import re
 from .. import fountain
 from ..fountain import AFTER_BREAK, EL_NAMES, IN_DIALOGUE, SCENE_PREFIXES, SCENE_RE, El, classify
 from ..bible import BibleIndex
-from .biblemenu import add_bible_menu
+from ..marks import MARK_RE
+from .biblemenu import add_bible_menu, add_cue_menu, add_mark_menu
 from .history import TextHistory
 from .common import TextDocumentAPI, center_column, first_available_font, paint_margins_as_page, word_count
 
@@ -124,6 +125,16 @@ class FountainHighlighter(QSyntaxHighlighter):
         for regex, fmt in self.INLINE:
             for m in regex.finditer(text):
                 self.setFormat(m.start(), m.end() - m.start(), fmt)
+        for m in MARK_RE.finditer(text):  # {the hooded figure|Xardas}: the tag faint, the phrase underlined
+            tag = _fmt(color=self.GREY)
+            tag.setFontPointSize(self.editor.document().defaultFont().pointSizeF() * 0.75)
+            self.setFormat(m.start(), 1, tag)
+            self.setFormat(m.end(1), m.end() - m.end(1), tag)
+            for i in range(m.start(1), m.end(1)):
+                f = self.format(i)
+                f.setUnderlineStyle(QTextCharFormat.UnderlineStyle.DotLine)
+                f.setUnderlineColor(QColor("#c07a2c"))
+                self.setFormat(i, 1, f)
         stripped = text.lstrip()
         if stripped[:1] in FORCED_MARKERS and el not in (El.DIALOGUE, El.PARENTHETICAL):
             self.setFormat(len(text) - len(stripped), 1, _fmt(color=self.GREY))
@@ -621,6 +632,10 @@ class ScreenplayEditor(TextDocumentAPI, QTextEdit):
             action = menu.addAction(f"{verb} “{name}” in Story Bible")
             menu.insertAction(menu.actions()[0], action)
             action.triggered.connect(lambda: self.bibleRequested.emit(kind, name))
+        # a description that stands for a character: "the hooded figure" / HOODED FIGURE is Xardas
+        add_mark_menu(menu, self, self.bible_index, self.cursorForPosition(e.pos()).position())
+        if el == El.CHARACTER and target and target[1] and not self.bible_lookup("character", target[1]):
+            add_cue_menu(menu, self, target[1], self.bible_index)
         menu.exec(e.globalPos())
 
     # --- completion -------------------------------------------------------------
