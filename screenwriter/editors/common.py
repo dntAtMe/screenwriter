@@ -38,10 +38,10 @@ def tint(highlighter, start: int, end: int, kind: str, strong: bool = False) -> 
     from .. import theme
 
     colour = QColor(BIBLE_COLORS.get(kind, "#888888"))
-    if theme.is_dark():
-        colour.setAlphaF(0.5 if strong else 0.28)
+    if theme.is_dark():  # at rest a gentle cue; under the mouse clearly there
+        colour.setAlphaF(0.42 if strong else 0.13)
     else:
-        colour.setAlphaF(0.36 if strong else 0.17)
+        colour.setAlphaF(0.30 if strong else 0.08)
     for i in range(start, end):
         f = highlighter.format(i)
         f.setBackground(colour)
