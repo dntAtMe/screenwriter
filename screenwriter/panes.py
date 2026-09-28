@@ -13,7 +13,7 @@ into the new pane, and a pane that runs out of tabs closes.
 from PySide6.QtCore import QEvent, Qt, Signal
 from PySide6.QtWidgets import QApplication, QSplitter, QTabWidget, QVBoxLayout, QWidget
 
-ACTIVE_STYLE = "QTabBar::tab:selected { border-bottom: 2px solid palette(highlight); }"
+ACTIVE_STYLE = "QTabBar::tab:selected { border-bottom: 2px solid palette(accent); }"
 
 
 class TabArea(QWidget):
@@ -27,6 +27,7 @@ class TabArea(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.splitter)
+        self.empty: QWidget | None = None  # shown instead of the panes when nothing is open
         self.panes: list[QTabWidget] = []
         self._bars_hidden = False
         self.active = self._add_pane()
@@ -36,6 +37,7 @@ class TabArea(QWidget):
 
     def _add_pane(self) -> QTabWidget:
         pane = QTabWidget()
+        pane.setObjectName("DocTabs")
         pane.setDocumentMode(True)
         pane.setTabsClosable(True)
         pane.setMovable(True)
@@ -152,7 +154,20 @@ class TabArea(QWidget):
                 return
             new = new.parentWidget()
 
+    def set_empty_widget(self, widget: QWidget) -> None:
+        """What to show when no document is open (a hint and a few buttons)."""
+        self.empty = widget
+        self.layout().addWidget(widget)
+        self._update_empty()
+
+    def _update_empty(self) -> None:
+        if self.empty is not None:
+            nothing = self.count() == 0
+            self.empty.setVisible(nothing)
+            self.splitter.setVisible(not nothing)
+
     def _on_pane_changed(self, pane: QTabWidget) -> None:
+        self._update_empty()
         if pane.count() == 0 and self.is_split():  # its last tab closed: the other pane takes the space
             was_active = pane is self.active
             self._drop_pane(pane)
@@ -216,7 +231,9 @@ class TabArea(QWidget):
             pane.setCurrentIndex(i)
 
     def addTab(self, widget: QWidget, title: str) -> int:
-        return self._global(self.active, self.active.addTab(widget, title))
+        index = self._global(self.active, self.active.addTab(widget, title))
+        self._update_empty()
+        return index
 
     def removeTab(self, index: int) -> None:
         pane, i = self._local(index)

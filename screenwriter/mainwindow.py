@@ -1,10 +1,11 @@
 import html
 import sys
 from datetime import datetime
+import re
 from pathlib import Path
 
-from PySide6.QtCore import QSettings, QStandardPaths, Qt, QTimer, QUrl
-from PySide6.QtGui import QAction, QActionGroup, QDesktopServices, QKeySequence
+from PySide6.QtCore import QSettings, QSize, QStandardPaths, Qt, QTimer, QUrl, Signal
+from PySide6.QtGui import QAction, QActionGroup, QDesktopServices, QIcon, QKeySequence
 from PySide6.QtWidgets import (
     QApplication,
     QFileDialog,
@@ -12,18 +13,24 @@ from PySide6.QtWidgets import (
     QInputDialog,
     QLabel,
     QListWidget,
+    QListWidgetItem,
     QMainWindow,
+    QMenu,
     QMessageBox,
     QPushButton,
+    QSizePolicy,
     QSplitter,
     QStackedWidget,
     QTabWidget,
+    QToolBar,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
 
 from . import REPOSITORY, __version__
-from .binder import Binder
+from . import icons
+from .binder import KIND_COLORS, Binder
 from .capture import QuickCapture, append_idea, format_idea
 from .cast import CastPanel
 from .corkboard import CorkboardView
@@ -65,38 +72,146 @@ APP_NAME = "Screenwriter"
 MAX_RECENT = 8
 
 
+class SideTabs(QTabWidget):
+    """The side panel's tabs as a compact switcher: every tab has an icon, and only the
+    open one shows its name (others show a count, if their label has one — "Updates (3)").
+    tabText() still answers with the full label."""
+
+    def __init__(self):
+        super().__init__()
+        self._labels: list[str] = []
+        self._icons: list[str] = []
+        self.setDocumentMode(True)
+        self.tabBar().setUsesScrollButtons(False)
+        self.currentChanged.connect(lambda _: self._render())
+
+    def addTab(self, widget: QWidget, label: str, icon_name: str = "") -> int:
+        index = super().addTab(widget, icons.icon(icon_name) if icon_name else QIcon(), "")
+        self._labels.insert(index, label)
+        self._icons.insert(index, icon_name)
+        self._render()
+        return index
+
+    def setTabText(self, index: int, text: str) -> None:
+        if 0 <= index < len(self._labels):
+            self._labels[index] = text
+            self._render()
+
+    def tabText(self, index: int) -> str:
+        return self._labels[index] if 0 <= index < len(self._labels) else ""
+
+    def _render(self) -> None:
+        for i, label in enumerate(self._labels):
+            name = re.split(r" \(| •", label)[0]
+            count = label[len(name):].strip(" ()")  # "3", or "•" for something new
+            shown = label if i == self.currentIndex() else count
+            super().setTabText(i, shown)
+            self.setTabToolTip(i, label)
+
+    def refresh_icons(self) -> None:
+        for i, icon_name in enumerate(self._icons):
+            if icon_name:
+                self.setTabIcon(i, icons.icon(icon_name, theme.tokens()["text"] if i == self.currentIndex() else None))
+
+
+
+class StatusLabel(QLabel):
+    """A status-bar label that says when its text changes (the header mirrors it)."""
+
+    changed = Signal()
+
+    def setText(self, text: str) -> None:
+        super().setText(text)
+        self.changed.emit()
+
+    def clear(self) -> None:
+        super().clear()
+        self.changed.emit()
+
+
+class BigButton(QPushButton):
+    """A large start-screen button: an icon, a bold title and a quieter line under it."""
+
+    def __init__(self, icon_name: str, title: str, detail: str, slot):
+        super().__init__()
+        self.setObjectName("BigButton")
+        self.icon_name = icon_name
+        self.setMinimumWidth(440)
+        self.setAccessibleName(title)
+        self.setToolTip(detail)
+        self.glyph = QLabel()
+        heading = QLabel(title)
+        heading.setObjectName("BigButtonTitle")
+        line = QLabel(detail)
+        line.setObjectName("BigButtonDetail")
+        text = QVBoxLayout()
+        text.setSpacing(1)
+        text.addWidget(heading)
+        text.addWidget(line)
+        row = QHBoxLayout(self)
+        row.setContentsMargins(16, 11, 16, 11)
+        row.setSpacing(14)
+        row.addWidget(self.glyph)
+        row.addLayout(text, 1)
+        for label in (self.glyph, heading, line):
+            label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.refresh_icons()
+        self.clicked.connect(slot)
+
+    def sizeHint(self) -> QSize:
+        return self.layout().sizeHint()
+
+    def refresh_icons(self) -> None:
+        self.glyph.setPixmap(icons.pixmap(self.icon_name, theme.tokens()["accent"], 22))
+
+
+def short_path(path: str) -> str:
+    home = str(Path.home())
+    return "~" + path[len(home):] if path.startswith(home) else path
+
+
 class Welcome(QWidget):
+    """The start screen: what the app is for, three ways in, and recent projects."""
+
     def __init__(self, window: "MainWindow"):
         super().__init__()
+        self.setObjectName("Welcome")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground)
+        logo = QLabel()
+        logo.setPixmap(QIcon(str(Path(__file__).resolve().parent / "resources" / "icon.png")).pixmap(QSize(72, 72)))
         title = QLabel(APP_NAME)
-        title.setStyleSheet("font-size: 32px; font-weight: 600;")
-        subtitle = QLabel("Screenplays, books, notes and ideas.")
-        subtitle.setStyleSheet("color: gray;")
-        new_btn = QPushButton("New Project…")
-        open_btn = QPushButton("Open Project…")
-        file_btn = QPushButton("Open Project File…")
-        file_btn.setToolTip("Open a .screenwriter file — a project synced through a cloud folder, or a copy someone sent you")
-        new_btn.clicked.connect(window.new_project)
-        open_btn.clicked.connect(window.open_project_dialog)
-        file_btn.clicked.connect(window.open_project_file)
-        self.recent = QListWidget()
-        self.recent.setMaximumHeight(180)
-        self.recent.itemActivated.connect(lambda item: window.open_project(Path(item.text())))
-
-        buttons = QHBoxLayout()
-        buttons.addWidget(new_btn)
-        buttons.addWidget(open_btn)
-        buttons.addWidget(file_btn)
+        title.setObjectName("WelcomeTitle")
+        subtitle = QLabel("Screenplays, books, notes and ideas — in one calm place.")
+        subtitle.setObjectName("WelcomeSubtitle")
+        self.buttons = [
+            ("plus", "New Project", "Start a screenplay, a novel, or both", window.new_project),
+            ("open", "Open Project…", "A project folder on this computer", window.open_project_dialog),
+            ("cloud", "Open Project File…", "A synced .screenwriter file, or a copy someone sent you", window.open_project_file),
+        ]
         column = QVBoxLayout()
-        column.addStretch()
+        column.setSpacing(8)
+        column.addStretch(2)
+        column.addWidget(logo)
+        column.addSpacing(6)
         column.addWidget(title)
         column.addWidget(subtitle)
-        column.addSpacing(16)
-        column.addLayout(buttons)
-        column.addSpacing(16)
-        column.addWidget(QLabel("Recent projects"))
+        column.addSpacing(22)
+        for icon_name, text, detail, slot in self.buttons:
+            column.addWidget(BigButton(icon_name, text, detail, slot))
+        column.addSpacing(18)
+        self.recent_label = QLabel("RECENT PROJECTS")
+        self.recent_label.setObjectName("SectionLabel")
+        column.addWidget(self.recent_label)
+        self.recent = QListWidget()
+        self.recent.setObjectName("Recent")
+        self.recent.setMaximumHeight(210)
+        self.recent.setIconSize(QSize(18, 18))
+        self.recent.setTextElideMode(Qt.TextElideMode.ElideMiddle)
+        self.recent.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.recent.itemActivated.connect(lambda item: window.open_project(Path(item.data(Qt.ItemDataRole.UserRole))))
+        self.recent.itemClicked.connect(lambda item: window.open_project(Path(item.data(Qt.ItemDataRole.UserRole))))
         column.addWidget(self.recent)
-        column.addStretch()
+        column.addStretch(3)
         outer = QHBoxLayout(self)
         outer.addStretch()
         outer.addLayout(column)
@@ -104,7 +219,53 @@ class Welcome(QWidget):
 
     def set_recent(self, paths: list[str]) -> None:
         self.recent.clear()
-        self.recent.addItems(paths)
+        for path in paths:
+            item = QListWidgetItem(icons.icon("folder"), f"{Path(path).name}    ·    {short_path(str(Path(path).parent))}")
+            item.setData(Qt.ItemDataRole.UserRole, path)
+            item.setToolTip(path)
+            self.recent.addItem(item)
+        self.recent_label.setVisible(bool(paths))
+        self.recent.setVisible(bool(paths))
+
+    def refresh_icons(self) -> None:
+        for i in range(self.recent.count()):
+            self.recent.item(i).setIcon(icons.icon("folder"))
+
+
+class EmptyState(QWidget):
+    """Shown where documents go when none is open."""
+
+    def __init__(self, window: "MainWindow"):
+        super().__init__()
+        self.setObjectName("EmptyState")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground)
+        text = QLabel("Pick something in the binder on the left, or start something new.")
+        text.setObjectName("EmptyText")
+        text.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        row = QHBoxLayout()
+        row.addStretch()
+        self._buttons = []
+        for kind, label in ((PROSE, "New Chapter"), (SCREENPLAY, "New Screenplay"), (BOARD, "New Board")):
+            button = QPushButton(label)
+            button.setIcon(icons.icon(kind, KIND_COLORS[kind]))
+            button.clicked.connect(lambda _=False, k=kind: window.binder.add(k))
+            row.addWidget(button)
+            self._buttons.append(button)
+        find = QPushButton("Go to Document…")
+        find.setIcon(icons.icon("search"))
+        find.clicked.connect(window.quick_open)
+        row.addWidget(find)
+        self._find = find
+        row.addStretch()
+        layout = QVBoxLayout(self)
+        layout.addStretch()
+        layout.addWidget(text)
+        layout.addSpacing(14)
+        layout.addLayout(row)
+        layout.addStretch()
+
+    def refresh_icons(self) -> None:
+        self._find.setIcon(icons.icon("search"))
 
 
 class MainWindow(QMainWindow):
@@ -147,17 +308,16 @@ class MainWindow(QMainWindow):
         self.outline.jumpRequested.connect(self._jump_to_line)
         self.search = SearchPanel(self._searchable_documents)
         self.search.openRequested.connect(self.open_at)
-        self.side = QTabWidget()
-        self.side.setDocumentMode(True)
-        self.side.addTab(self.outline, "Outline")
-        self.side.addTab(self.search, "Search")
+        self.side = SideTabs()
+        self.side.addTab(self.outline, "Outline", "outline")
+        self.side.addTab(self.search, "Search", "search")
         self.cast = CastPanel(self.binder.icons)
         self.cast.openRequested.connect(self.open_document)
-        self.side.addTab(self.cast, "Cast")
+        self.side.addTab(self.cast, "Cast", "cast")
         self.updates = UpdatesPanel()
         self.updates.openRequested.connect(self.open_document)
         self.updates.historyRequested.connect(lambda path: self.show_history(path))
-        self.side.addTab(self.updates, "Updates")
+        self.side.addTab(self.updates, "Updates", "updates")
         self.comments: list[notes.Comment] = []
         self.comments_panel = CommentsPanel()
         self.comments_panel._refresh = self._show_comments
@@ -166,7 +326,9 @@ class MainWindow(QMainWindow):
         self.comments_panel.replyRequested.connect(self.reply_to_comment)
         self.comments_panel.resolveRequested.connect(self.resolve_comment)
         self.comments_panel.deleteRequested.connect(self.delete_comment)
-        self.side.addTab(self.comments_panel, "Comments")
+        self.side.addTab(self.comments_panel, "Comments", "comment")
+        self.side.refresh_icons()
+        self.side.currentChanged.connect(lambda _: self.side.refresh_icons())
         self.side.currentChanged.connect(lambda _: self._show_comments())
         self.side.currentChanged.connect(lambda _: self._refresh_updates())
         self.bible_index = bible.BibleIndex()
@@ -176,8 +338,14 @@ class MainWindow(QMainWindow):
         self.outline_timer = QTimer(self, singleShot=True, interval=300)
         self.outline_timer.timeout.connect(self._refresh_outline)
 
+        self.binder_panel = self._build_binder_panel()
+        self.tabs.set_empty_widget(EmptyState(self))
+        self.side.setObjectName("SidePanel")
+        self.side.tabBar().setDrawBase(False)
+
         self.splitter = QSplitter()
-        self.splitter.addWidget(self.binder)
+        self.splitter.setHandleWidth(3)
+        self.splitter.addWidget(self.binder_panel)
         self.splitter.addWidget(center)
         self.splitter.addWidget(self.side)
         self.splitter.setStretchFactor(1, 1)
@@ -189,7 +357,7 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(self.splitter)
         self.setCentralWidget(self.stack)
 
-        self.sync_label = QLabel()
+        self.sync_label = StatusLabel()
         self.sync_label.setStyleSheet("color: gray;")
         self.conflicts_button = QPushButton()
         self.conflicts_button.setFlat(True)
@@ -201,7 +369,7 @@ class MainWindow(QMainWindow):
         self.people_label = QLabel()
         self.statusBar().addPermanentWidget(self.people_label)
         self.statusBar().addPermanentWidget(self.sync_label)
-        self.save_label = QLabel()
+        self.save_label = StatusLabel()
         self.save_label.setStyleSheet("color: gray;")
         self.save_label.setToolTip("Everything is saved automatically as you write; Ctrl+S saves right away")
         self.statusBar().addPermanentWidget(self.save_label)
@@ -242,6 +410,9 @@ class MainWindow(QMainWindow):
         self.spell = spelling.SpellService(self)
         self._guessed_languages = spelling.default_languages()
         self._build_menus()
+        self._build_header()
+        self.save_label.changed.connect(self._update_header)
+        self.sync_label.changed.connect(self._update_header)
         self._update_format_bar()
         self.shortcut_hints = ShortcutHints(self)
         self.double_shift = DoubleShift(self)
@@ -260,6 +431,118 @@ class MainWindow(QMainWindow):
             self.restoreGeometry(geometry)
         if splitter := self.settings.value("splitter"):
             self.splitter.restoreState(splitter)
+        self._update_header()  # no project yet: the start screen, without header or status bar
+
+    # --- header bar and panels ---------------------------------------------------
+
+    def _build_binder_panel(self) -> QWidget:
+        """The binder under a small title, with a + menu for new items."""
+        panel = QWidget()
+        panel.setObjectName("BinderPanel")
+        panel.setAttribute(Qt.WidgetAttribute.WA_StyledBackground)
+        title = QLabel("PROJECT")
+        title.setObjectName("PanelHeader")
+        self.binder_add = QToolButton()
+        self.binder_add.setObjectName("PanelButton")
+        self.binder_add.setToolTip("Add a chapter, screenplay, note, board, character, location or folder")
+        self.binder_add.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.binder_add.setMenu(self._new_menu())
+        header = QHBoxLayout()
+        header.setContentsMargins(0, 0, 0, 0)
+        header.addWidget(title)
+        header.addStretch()
+        header.addWidget(self.binder_add)
+        layout = QVBoxLayout(panel)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        layout.addLayout(header)
+        layout.addWidget(self.binder, 1)
+        return panel
+
+    def _new_menu(self) -> QMenu:
+        menu = QMenu(self)
+        for kind, label in ((PROSE, "Chapter / Prose Document"), (SCREENPLAY, "Screenplay"), (NOTE, "Note"),
+                            (BOARD, "Board (mind map)"), (CHARACTER, "Character"), (LOCATION, "Location"),
+                            (FOLDER, "Folder")):
+            action = menu.addAction(label, lambda k=kind: self.project and self.binder.add(k))
+            action.setData(kind)
+        menu.addSeparator()
+        menu.addAction("Capture an Idea…", self.capture_idea)
+        menu.aboutToShow.connect(lambda m=menu: [a.setIcon(self.binder.icons[a.data()]) for a in m.actions() if a.data()])
+        return menu
+
+    def _build_header(self) -> None:
+        """The bar across the top: panels, the project and its state, the main actions."""
+        bar = QToolBar("Header")
+        bar.setObjectName("HeaderBar")
+        bar.setMovable(False)
+        bar.setFloatable(False)
+        bar.setIconSize(QSize(18, 18))
+        bar.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        bar.toggleViewAction().setVisible(False)
+        self.addToolBar(Qt.ToolBarArea.TopToolBarArea, bar)
+        self.header = bar
+        self._header_buttons: list[tuple[QToolButton, str]] = []
+
+        def button(icon_name: str, text: str, tip: str, slot=None, menu: QMenu | None = None, label: bool = True):
+            b = QToolButton()
+            b.setIcon(icons.icon(icon_name))
+            b.setText(text)
+            b.setToolTip(tip)
+            b.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon if label else Qt.ToolButtonStyle.ToolButtonIconOnly)
+            if slot:
+                b.clicked.connect(slot)
+            if menu:
+                b.setMenu(menu)
+                b.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+            bar.addWidget(b)
+            self._header_buttons.append((b, icon_name))
+            return b
+
+        self.binder_toggle = button("sidebar-left", "", "Show or hide the binder (Ctrl+\\)", self.toggle_binder, label=False)
+        self.project_title = QLabel()
+        self.project_title.setObjectName("ProjectTitle")
+        bar.addWidget(self.project_title)
+        self.project_status = QLabel()
+        self.project_status.setObjectName("ProjectStatus")
+        bar.addWidget(self.project_status)
+        spacer = QWidget()
+        spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        bar.addWidget(spacer)
+        button("plus", "New", "Add a chapter, screenplay, note, board, character…", menu=self._new_menu())
+        button("search", "Find", "Go to any document, scene or card (press Shift twice)", self.quick_open)
+        button("history", "History", "Earlier versions of the project (Ctrl+Alt+H)", lambda: self.show_history())
+        self.sync_button = button("cloud", "Sync", "Back up and sync through Google Drive or a cloud folder",
+                                  self.show_sync_settings)
+        button("focus", "", "Focus mode — just the page (Ctrl+Shift+D)", self.toggle_focus, label=False)
+        self.side_toggle = button("sidebar-right", "", "Show or hide the side panel (Ctrl+Alt+\\)", self.toggle_side, label=False)
+        self.header.setVisible(False)  # shown once a project is open
+
+    def _sync_header_toggles(self) -> None:
+        tokens = theme.tokens()
+        self.binder_toggle.setIcon(icons.icon("sidebar-left", tokens["accent"] if self.binder_panel.isVisible() else None))
+        self.side_toggle.setIcon(icons.icon("sidebar-right", tokens["accent"] if self.side.isVisible() else None))
+
+    def _update_header(self) -> None:
+        """Project name, and how it's doing: saved, synced."""
+        self.statusBar().setVisible(self.project is not None)
+        if self.project is None:
+            self.header.setVisible(False)
+            return
+        self.header.setVisible(True)
+        self.project_title.setText(self.project.name)
+        parts = [t for t in (self.save_label.text(), self.sync_label.text()) if t]
+        self.project_status.setText("  ·  ".join(parts))
+        self.sync_button.setText("Synced" if self.sync_target and "Synced" in self.sync_label.text()
+                                 else "Sync" if not self.sync_target else "Sync…")
+        self._sync_header_toggles()
+
+    def refresh_icons(self) -> None:
+        for b, icon_name in self._header_buttons:
+            b.setIcon(icons.icon(icon_name))
+        self.binder_add.setIcon(icons.icon("plus"))
+        if self.project is not None:
+            self._sync_header_toggles()
 
     # --- menus ------------------------------------------------------------------
 
@@ -476,6 +759,7 @@ class MainWindow(QMainWindow):
         for node_id in self.settings.value(f"open_tabs/{project.path}", []) or []:
             if project.find(node_id):
                 self.open_document(node_id)
+        self._update_header()
 
     def close_project(self) -> None:
         if self.project is None:
@@ -514,6 +798,7 @@ class MainWindow(QMainWindow):
         self.welcome.set_recent(self._recent())
         self._set_project_actions_enabled(False)
         self.setWindowTitle(self._app_title())
+        self._update_header()
 
     def _close_project_from_menu(self) -> None:
         self.settings.remove("last_project")  # don't reopen it on next launch
@@ -1869,10 +2154,12 @@ class MainWindow(QMainWindow):
     # --- view -------------------------------------------------------------------
 
     def toggle_binder(self) -> None:
-        self.binder.setVisible(not self.binder.isVisible())
+        self.binder_panel.setVisible(not self.binder_panel.isVisible())
+        self._sync_header_toggles()
 
     def toggle_side(self) -> None:
         self.side.setVisible(not self.side.isVisible())
+        self._sync_header_toggles()
 
     def show_outline(self) -> None:
         self.side.show()
@@ -1885,9 +2172,10 @@ class MainWindow(QMainWindow):
         self.search.focus(editor.selected_text() if editor else "")
 
     def toggle_focus(self) -> None:
-        focused = self.binder.isVisible()
-        self.binder.setVisible(not focused)
+        focused = self.binder_panel.isVisible()
+        self.binder_panel.setVisible(not focused)
         self.side.setVisible(not focused)
+        self.header.setVisible(not focused)
         self.statusBar().setVisible(not focused)
         self.tabs.set_tab_bars_visible(not focused)
         if focused:
