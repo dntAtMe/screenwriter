@@ -16,7 +16,8 @@ def test_dark_and_light_at_runtime(qapp, sample_project):
     try:
         w.set_appearance("dark")
         qapp.processEvents()
-        assert theme.is_dark() and qapp.style().name().lower() == "fusion"
+        assert theme.is_dark() and theme.tokens() is theme.DARK
+        assert "#HeaderBar" in qapp.styleSheet()  # the app-wide stylesheet is in place
         pal = editor.palette()
         assert pal.color(QPalette.ColorRole.Base).lightness() < 128
         assert pal.color(QPalette.ColorRole.Window) == pal.color(QPalette.ColorRole.Base)  # margins look like the page
@@ -24,7 +25,7 @@ def test_dark_and_light_at_runtime(qapp, sample_project):
 
         w.set_appearance("light")
         qapp.processEvents()
-        assert not theme.is_dark()
+        assert not theme.is_dark() and theme.tokens() is theme.LIGHT
         pal = editor.palette()
         assert pal.color(QPalette.ColorRole.Base).lightness() > 128
         assert pal.color(QPalette.ColorRole.Window) == pal.color(QPalette.ColorRole.Base)

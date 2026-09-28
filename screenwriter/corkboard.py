@@ -168,6 +168,7 @@ class CorkboardView(QListWidget):
         self.binder = binder
         self.node_id = folder_id
         self.text_of = text_of
+        self.setObjectName("Corkboard")
         self.icons = binder.icons
         self._scale = 1.0
         self._updating = False

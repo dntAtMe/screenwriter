@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
 )
 
 from .editors.board import NODE_MIME
+from . import icons
 from .project import BOARD, CHARACTER, DOCUMENT_KINDS, LOCATION, FOLDER, NOTE, PROSE, SCREENPLAY, TRASH, Node, Project, walk
 
 ID_ROLE = Qt.ItemDataRole.UserRole
@@ -64,22 +65,18 @@ class PresenceDelegate(QStyledItemDelegate):
 DEFAULT_TITLES = {PROSE: "Untitled Chapter", SCREENPLAY: "Untitled Screenplay", NOTE: "Untitled Note", BOARD: "Untitled Board", CHARACTER: "New Character", LOCATION: "New Location", FOLDER: "New Folder"}
 
 
-def _letter_icon(letter: str, color: str) -> QIcon:
-    pm = QPixmap(32, 32)
-    pm.fill(Qt.GlobalColor.transparent)
-    p = QPainter(pm)
-    p.setRenderHint(QPainter.RenderHint.Antialiasing)
-    p.setBrush(QColor(color))
-    p.setPen(Qt.PenStyle.NoPen)
-    p.drawRoundedRect(3, 3, 26, 26, 6, 6)
-    font = QFont()
-    font.setPixelSize(17)
-    font.setBold(True)
-    p.setFont(font)
-    p.setPen(QColor("white"))
-    p.drawText(pm.rect(), Qt.AlignmentFlag.AlignCenter, letter)
-    p.end()
-    return QIcon(pm)
+KIND_COLORS = {  # each kind of document has its own colour; folders and the Trash follow the theme
+    PROSE: "#4f7cac",
+    SCREENPLAY: "#c0563c",
+    NOTE: "#5f9150",
+    BOARD: "#8a63b8",
+    CHARACTER: "#c07a2c",
+    LOCATION: "#2f8a86",
+}
+
+
+def kind_icons() -> dict:
+    return {kind: icons.icon(kind, KIND_COLORS.get(kind)) for kind in (*KIND_COLORS, FOLDER, TRASH)}
 
 
 class Binder(QTreeWidget):
@@ -102,20 +99,11 @@ class Binder(QTreeWidget):
         self.setIndentation(16)
         self.setExpandsOnDoubleClick(False)  # double-clicking a folder opens its corkboard
 
-        style = self.style()
+        self.setObjectName("Binder")
         self.presence: dict[str, list[tuple[str, str]]] = {}  # node id -> [(name, colour)] of people there
         self.unread: set[str] = set()  # documents others changed that you haven't opened since
         self.setItemDelegate(PresenceDelegate(self))
-        self.icons = {
-            FOLDER: style.standardIcon(QStyle.StandardPixmap.SP_DirIcon),
-            TRASH: style.standardIcon(QStyle.StandardPixmap.SP_TrashIcon),
-            PROSE: _letter_icon("P", "#4f7cac"),
-            SCREENPLAY: _letter_icon("S", "#b5563c"),
-            NOTE: _letter_icon("N", "#6b8f4e"),
-            BOARD: _letter_icon("B", "#8a63b8"),
-            CHARACTER: _letter_icon("C", "#c07a2c"),
-            LOCATION: _letter_icon("L", "#2f8a86"),
-        }
+        self.icons = kind_icons()  # shared with the corkboard, cast list and Go to Document
 
         self.itemClicked.connect(self._on_open)
         self.itemActivated.connect(self._on_open)
@@ -123,6 +111,17 @@ class Binder(QTreeWidget):
         self.itemExpanded.connect(lambda _: self.structureChanged.emit())
         self.itemCollapsed.connect(lambda _: self.structureChanged.emit())
         self.customContextMenuRequested.connect(self._context_menu)
+
+    def refresh_icons(self) -> None:
+        """Redraw icons in the theme's colours (called when the appearance changes)."""
+        self.icons.update(kind_icons())
+        root = self.invisibleRootItem()
+        stack = [root.child(i) for i in range(root.childCount())]
+        while stack:
+            item = stack.pop()
+            if item.data(0, KIND_ROLE) in self.icons:
+                item.setIcon(0, self.icons[item.data(0, KIND_ROLE)])
+            stack += [item.child(i) for i in range(item.childCount())]
 
     # --- model <-> tree ---------------------------------------------------------
 
