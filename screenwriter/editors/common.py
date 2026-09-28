@@ -26,6 +26,75 @@ def underline_misspelled(highlighter, text: str, spell) -> None:
                 highlighter.setFormat(i, 1, f)
 
 
+BIBLE_COLORS = {"character": "#c07a2c", "location": "#2f8a86"}  # match the binder icons
+
+
+def tint(highlighter, start: int, end: int, kind: str, strong: bool = False) -> None:
+    """A soft background in the kind's colour over [start, end) of the block, keeping the
+    rest of each character's format; stronger under the mouse. (Underlines are for
+    spelling mistakes only.)"""
+    from PySide6.QtGui import QColor
+
+    from .. import theme
+
+    colour = QColor(BIBLE_COLORS.get(kind, "#888888"))
+    if theme.is_dark():
+        colour.setAlphaF(0.5 if strong else 0.28)
+    else:
+        colour.setAlphaF(0.36 if strong else 0.17)
+    for i in range(start, end):
+        f = highlighter.format(i)
+        f.setBackground(colour)
+        highlighter.setFormat(i, 1, f)
+
+
+def mark_bible_names(highlighter, text: str, index) -> None:
+    """Tint every story-bible name in the block — amber for characters, teal for
+    locations — so names stand out from the text around them without shouting."""
+    if index:
+        hover = getattr(highlighter, "hover", None)  # (block number, start, end) under the mouse
+        here = highlighter.currentBlock().blockNumber()
+        for m, entry in index.find(text):
+            strong = hover is not None and hover[0] == here and hover[1] == m.start()
+            tint(highlighter, m.start(), m.end(), entry.kind, strong)
+
+
+def name_span_at(editor, pos, index):
+    """(block number, start, end) of the story-bible name under a viewport point, or None.
+    Only when the point is really over the name, not just nearest to it."""
+    if not index or pos is None:
+        return None
+    cursor = editor.cursorForPosition(pos)
+    block = cursor.block()
+    offset = cursor.positionInBlock()
+    for m, _entry in index.find(block.text()):
+        if not m.start() <= offset <= m.end():
+            continue
+        start, end = QTextCursor(block), QTextCursor(block)
+        start.setPosition(block.position() + m.start())
+        end.setPosition(block.position() + m.end())
+        a, b = editor.cursorRect(start), editor.cursorRect(end)
+        if a.top() == b.top():  # on one line: the point must be over those characters
+            if not (a.left() <= pos.x() <= b.left() and a.top() <= pos.y() <= a.bottom()):
+                return None
+        return block.blockNumber(), m.start(), m.end()
+    return None
+
+
+def update_name_hover(editor, highlighter, index, pos) -> None:
+    """Deepen the tint of the name under the mouse (pos None: the mouse left)."""
+    span = name_span_at(editor, pos, index)
+    old = getattr(highlighter, "hover", None)
+    if span == old:
+        return
+    highlighter.hover = span
+    doc = editor.document()
+    for s in {old, span} - {None}:
+        block = doc.findBlockByNumber(s[0])
+        if block.isValid():
+            highlighter.rehighlightBlock(block)
+
+
 COMMENT_TINT = (240, 200, 60)  # a soft yellow behind commented text
 
 

@@ -288,6 +288,8 @@ def _apply(app, hints) -> None:
     app.setStyle("Fusion")  # one look everywhere; the stylesheet does the rest
     app.setPalette(palette(_current))
     app.setStyleSheet(stylesheet(_current))
-    for widget in app.allWidgets():  # icons drawn in the old colours
+    for widget in app.allWidgets():  # icons and text marks drawn in the old colours
         if hasattr(widget, "refresh_icons"):
             widget.refresh_icons()
+        if hasattr(widget, "refresh_theme"):
+            widget.refresh_theme()

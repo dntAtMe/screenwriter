@@ -16,6 +16,9 @@ All notable changes to Screenwriter are listed here. The format follows
 - The binder has a **Project** heading with a **+** menu for new items; the side panel's tabs are a compact
   icon switcher that names the open tab.
 - A new **start screen**, and a hint with quick buttons where documents go when none is open.
+- **Story Bible names** get a soft highlight instead of a dotted underline — amber for characters, teal for
+  locations — in prose and now in scripts too (action, cues, scene headings). The name under the mouse
+  deepens, so it's clear it can be hovered and ⌘/Ctrl-clicked. Underlines now only ever mean a spelling mistake.
 
 ## [0.7.0] - 2026-09-27
 

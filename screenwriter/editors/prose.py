@@ -19,6 +19,8 @@ from .biblemenu import add_bible_menu, add_mark_menu
 from .spellmenu import add_comment_action, add_spelling_menu
 from .common import (
     TextDocumentAPI,
+    mark_bible_names,
+    update_name_hover,
     center_column,
     paint_margins_as_page,
     highlight_comments,
@@ -27,7 +29,6 @@ from .common import (
 )
 
 COLUMN_CHARS = 70
-BIBLE_COLORS = {"character": "#c07a2c", "location": "#2f8a86"}  # match the binder icons
 WORD_BEFORE_RE = re.compile(r"[\w'’-]+$")
 
 
@@ -83,12 +84,7 @@ class MarkdownHighlighter(QSyntaxHighlighter):
         for m in MARK_RE.finditer(text):  # {the hooded figure|Xardas}: the tag faint, the phrase as written
             self.setFormat(m.start(), 1, tag)
             self.setFormat(m.end(1), m.end() - m.end(1), tag)
-        for m, entry in self.bible.find(text):
-            for i in range(m.start(), m.end()):  # keep bold/italic, add the underline
-                f = self.format(i)
-                f.setUnderlineStyle(QTextCharFormat.UnderlineStyle.DotLine)
-                f.setUnderlineColor(QColor(BIBLE_COLORS.get(entry.kind, "#888")))
-                self.setFormat(i, 1, f)
+        mark_bible_names(self, text, self.bible)
         underline_misspelled(self, text, self.spell)
         highlight_comments(self, text)
 
@@ -138,6 +134,9 @@ class ProseEditor(TextDocumentAPI, QPlainTextEdit):
     def bible(self) -> BibleIndex:
         return self.highlighter.bible
 
+    def refresh_theme(self) -> None:
+        self.highlighter.rehighlight()  # name tints are lighter or deeper in dark mode
+
     def set_bible(self, index: BibleIndex) -> None:
         """Use these names for underlining, hover cards and completion."""
         signature = lambda idx: [(e.node_id, e.names, e.summary) for e in idx.entries]
@@ -179,9 +178,15 @@ class ProseEditor(TextDocumentAPI, QPlainTextEdit):
         super().mousePressEvent(e)
 
     def mouseMoveEvent(self, e):
-        over = e.modifiers() & Qt.KeyboardModifier.ControlModifier and self.bible_at(e.position().toPoint())
+        pos = e.position().toPoint()
+        over = e.modifiers() & Qt.KeyboardModifier.ControlModifier and self.bible_at(pos)
         self.viewport().setCursor(Qt.CursorShape.PointingHandCursor if over else Qt.CursorShape.IBeamCursor)
+        update_name_hover(self, self.highlighter, self.bible, pos)
         super().mouseMoveEvent(e)
+
+    def leaveEvent(self, e):
+        update_name_hover(self, self.highlighter, self.bible, None)
+        super().leaveEvent(e)
 
     def contextMenuEvent(self, e):
         menu = self.createStandardContextMenu()

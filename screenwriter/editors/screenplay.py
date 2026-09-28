@@ -48,6 +48,9 @@ from .spellmenu import add_comment_action, add_spelling_menu
 from .history import TextHistory
 from .common import (
     TextDocumentAPI,
+    mark_bible_names,
+    update_name_hover,
+    tint,
     center_column,
     paint_margins_as_page,
     highlight_comments,
@@ -133,16 +136,14 @@ class FountainHighlighter(QSyntaxHighlighter):
         for regex, fmt in self.INLINE:
             for m in regex.finditer(text):
                 self.setFormat(m.start(), m.end() - m.start(), fmt)
-        for m in MARK_RE.finditer(text):  # {the hooded figure|Xardas}: the tag faint, the phrase underlined
+        if el not in (El.TITLE_PAGE, El.SECTION, El.SYNOPSIS):
+            mark_bible_names(self, text, self.editor.bible_index)
+        for m in MARK_RE.finditer(text):  # {the hooded figure|Xardas}: the tag faint, the phrase tinted
             tag = _fmt(color=self.GREY)
             tag.setFontPointSize(self.editor.document().defaultFont().pointSizeF() * 0.75)
             self.setFormat(m.start(), 1, tag)
             self.setFormat(m.end(1), m.end() - m.end(1), tag)
-            for i in range(m.start(1), m.end(1)):
-                f = self.format(i)
-                f.setUnderlineStyle(QTextCharFormat.UnderlineStyle.DotLine)
-                f.setUnderlineColor(QColor("#c07a2c"))
-                self.setFormat(i, 1, f)
+            tint(self, m.start(1), m.end(1), "character")
         stripped = text.lstrip()
         if stripped[:1] in FORCED_MARKERS and el not in (El.DIALOGUE, El.PARENTHETICAL):
             self.setFormat(len(text) - len(stripped), 1, _fmt(color=self.GREY))
@@ -159,7 +160,31 @@ class ScreenplayEditor(TextDocumentAPI, QTextEdit):
     bibleAliasRequested = Signal(str, str)  # entry node id, selected text
     addWordRequested = Signal(str)  # to the project dictionary
     commentRequested = Signal()  # on the selected text
-    bible_index = BibleIndex()  # set by the main window
+    _bible = BibleIndex()
+
+    @property
+    def bible_index(self) -> BibleIndex:
+        return self._bible
+
+    @bible_index.setter
+    def bible_index(self, index: BibleIndex) -> None:
+        """Set by the main window; the script is redrawn when the names change."""
+        signature = lambda idx: [(e.node_id, e.names) for e in idx.entries]
+        changed = signature(index) != signature(self._bible)
+        self._bible = index
+        if changed and hasattr(self, "highlighter"):
+            self.highlighter.rehighlight()
+
+    def refresh_theme(self) -> None:
+        self.highlighter.rehighlight()  # name tints are lighter or deeper in dark mode
+
+    def mouseMoveEvent(self, e):
+        update_name_hover(self, self.highlighter, self._bible, e.position().toPoint())
+        super().mouseMoveEvent(e)
+
+    def leaveEvent(self, e):
+        update_name_hover(self, self.highlighter, self._bible, None)
+        super().leaveEvent(e)
     spell = None  # the SpellService, set by the main window
 
     # Set by the main window: story bible names for completion, and entry lookup.
@@ -183,6 +208,7 @@ class ScreenplayEditor(TextDocumentAPI, QTextEdit):
         self._applying = False
         self._laid_out_unit = 0.0  # indent per character at the last layout
         self.highlighter = FountainHighlighter(self)
+        self.viewport().setMouseTracking(True)  # names deepen their tint under the mouse
         self.highlighter.comment_spans = self.comment_spans
         self.highlighter.active_comment = self.active_comment
 
