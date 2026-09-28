@@ -6,6 +6,17 @@ All notable changes to Screenwriter are listed here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- **A new look.** Calm, modern styling in light and dark: soft panel colours, rounded selection, pill-shaped
+  tabs, thin scrollbars and one ink-blue accent, the same on macOS, Windows and Linux.
+- **New icons** for every kind of document (page, clapperboard, sticky note, board, person, map pin) and for
+  the toolbar, crisp at any size and recoloured for dark mode.
+- **A header bar** with the project's name and save/sync state, and labelled **New**, **Find**, **History** and
+  **Sync** buttons, plus toggles for the binder, the side panel and focus mode.
+- The binder has a **Project** heading with a **+** menu for new items; the side panel's tabs are a compact
+  icon switcher that names the open tab.
+- A new **start screen**, and a hint with quick buttons where documents go when none is open.
+
 ## [0.7.0] - 2026-09-27
 
 ### Added

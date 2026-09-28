@@ -23,7 +23,8 @@ sys.path.insert(0, str(ROOT))
 
 SIZE = QSize(1600, 978)
 SCALE = 1.25  # the window is 1280 x 782, drawn at 125% like a typical laptop screen
-OUT = ROOT / "docs" / "images"
+OUT = Path(os.environ.get("SCREENSHOTS_OUT", ROOT / "docs" / "images"))  # e.g. to preview elsewhere
+APPEARANCE = os.environ.get("SCREENSHOTS_APPEARANCE", "dark")  # "dark" or "light"
 
 BIBLE = [
     ("character", "Mara Quinn", {"aliases": "MARA, the keeper", "role": "Lighthouse keeper", "age": "40s",
@@ -46,9 +47,11 @@ def main(wanted: set[str]) -> None:
     app = QApplication(sys.argv[:1])
     app.setOrganizationName("ScreenwriterScreenshots")
     app.setApplicationName("ScreenwriterScreenshots")
-    app.setStyle("Fusion")
-    app.styleHints().setColorScheme(Qt.ColorScheme.Dark)
     QSettings().clear()
+    QSettings().setValue("appearance", APPEARANCE)
+    from screenwriter import theme
+
+    theme.apply()  # the app's own look, as users see it
 
     from screenwriter import bible
     from screenwriter.mainwindow import MainWindow
@@ -56,7 +59,8 @@ def main(wanted: set[str]) -> None:
 
     work = Path(tempfile.mkdtemp())
     project_path = work / "The Lighthouse"
-    shutil.copytree(ROOT / "examples" / "The Lighthouse", project_path, ignore=shutil.ignore_patterns(".history", "*.tmp"))
+    sample = Path(os.environ.get("SCREENSHOTS_SAMPLE", ROOT / "examples" / "The Lighthouse"))
+    shutil.copytree(sample, project_path, ignore=shutil.ignore_patterns(".history", "*.tmp"))
 
     window = MainWindow()
     window.resize(SIZE / SCALE)
@@ -88,7 +92,7 @@ def main(wanted: set[str]) -> None:
         image = window.grab().toImage().scaled(SIZE, Qt.AspectRatioMode.IgnoreAspectRatio,
                                                Qt.TransformationMode.SmoothTransformation)
         image.save(str(OUT / f"{name}.png"))
-        print(f"docs/images/{name}.png")
+        print(OUT / f"{name}.png")
 
     def screenplay():
         for node_id in ("pilot", "ch01", "storymap", ids["Mara Quinn"]):
