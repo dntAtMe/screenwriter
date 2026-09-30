@@ -739,7 +739,14 @@ class MainWindow(QMainWindow):
         if not Project.is_project(path):
             QMessageBox.warning(self, "Open Project", f"{path} is not a {APP_NAME} project (no project.json).")
             return
-        self._activate(Project.open(path))
+        try:
+            self._activate(Project.open(path))
+        except Exception as e:  # a damaged project must not take the app down with it
+            if self.project is not None and self.project.path == path:
+                self.close_project()
+            if self.settings.value("last_project") == str(path):
+                self.settings.remove("last_project")  # don't fail the same way on the next start
+            QMessageBox.warning(self, "Open Project", f"Could not open {path.name}:\n{type(e).__name__}: {e}")
 
     def _activate(self, project: Project) -> None:
         self.close_project()
@@ -796,9 +803,10 @@ class MainWindow(QMainWindow):
         self.binder.set_unread(set())
         self.updates.set_updates([], self.person_name(), None)
         self.side.setTabText(self.side.indexOf(self.updates), "Updates")
-        self.history.pack()
-        self.history.close()
-        self.history = None
+        if self.history is not None:  # (not there if opening the project failed halfway)
+            self.history.pack()
+            self.history.close()
+            self.history = None
         self.settings.setValue(f"open_tabs/{self.project.path}", self._open_tab_ids())
         while self.tabs.count():
             self._remove_tab(0)

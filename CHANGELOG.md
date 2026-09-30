@@ -10,6 +10,11 @@ All notable changes to Screenwriter are listed here. The format follows
 - **Open Recent.** Click the project's name in the header (or press ⌃⌥O) to switch to one of your ten most
   recently opened projects; **File ▸ Open Recent** lists them too, with a way to clear the list.
 
+### Fixed
+- A project containing kinds of entries from a newer version of Screenwriter no longer crashes the app on
+  start: they open as plain notes and are kept exactly as they are. Any project that can't be opened now
+  shows a message and the start screen instead of quitting.
+
 ### Changed
 - **A new look.** Calm, modern styling in light and dark: soft panel colours, rounded selection, pill-shaped
   tabs, thin scrollbars and one ink-blue accent, the same on macOS, Windows and Linux.

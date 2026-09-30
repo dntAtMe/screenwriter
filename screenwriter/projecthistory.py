@@ -210,16 +210,16 @@ class ProjectHistory:
 
     def titles_at(self, commit_id: bytes | str) -> dict[str, tuple[str, str]]:
         """{doc path: (title, kind)} from the binder as it was at that save point."""
-        from .project import EXTENSIONS, Node, walk
+        from .project import Node, extension, walk
 
         data = self.file_at(commit_id, "project.json")
         if not data:
             return {}
         nodes = [Node.from_dict(d) for d in json.loads(data).get("binder", [])]
         return {
-            f"docs/{n.id}{EXTENSIONS[n.kind]}": (n.title, n.kind)
+            f"docs/{n.id}{extension(n.kind)}": (n.title, n.kind)
             for n in walk(nodes)
-            if n.kind in EXTENSIONS
+            if n.is_document
         }
 
     def node_at(self, commit_id: bytes | str, node_id: str):

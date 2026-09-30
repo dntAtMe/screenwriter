@@ -32,6 +32,11 @@ EXTENSIONS = {
 }
 
 
+def extension(kind: str) -> str:
+    """A document kind's file extension; Markdown for kinds from a newer version of the app."""
+    return EXTENSIONS.get(kind, ".md")
+
+
 @dataclass
 class Node:
     id: str
@@ -44,7 +49,8 @@ class Node:
 
     @property
     def is_document(self) -> bool:
-        return self.kind in DOCUMENT_KINDS
+        # kinds a newer version added count as documents too, so their files are kept and shown
+        return self.kind not in (FOLDER, TRASH)
 
     def to_dict(self) -> dict:
         d = {"id": self.id, "title": self.title, "kind": self.kind}
@@ -140,7 +146,7 @@ class Project:
         return node
 
     def doc_path(self, node: Node) -> Path:
-        return self.path / DOCS_DIR / f"{node.id}{EXTENSIONS[node.kind]}"
+        return self.path / DOCS_DIR / f"{node.id}{extension(node.kind)}"
 
     def read_text(self, node: Node) -> str:
         path = self.doc_path(node)

@@ -75,8 +75,15 @@ KIND_COLORS = {  # each kind of document has its own colour; folders and the Tra
 }
 
 
+class KindIcons(dict):
+    """Icons by document kind; a kind from a newer version of the app looks like a note."""
+
+    def __missing__(self, kind: str):
+        return self[NOTE]
+
+
 def kind_icons() -> dict:
-    return {kind: icons.icon(kind, KIND_COLORS.get(kind)) for kind in (*KIND_COLORS, FOLDER, TRASH)}
+    return KindIcons({kind: icons.icon(kind, KIND_COLORS.get(kind)) for kind in (*KIND_COLORS, FOLDER, TRASH)})
 
 
 class Binder(QTreeWidget):

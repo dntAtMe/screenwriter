@@ -47,3 +47,49 @@ def test_documents_are_saved_with_plain_newlines(tmp_path):
     p.root.insert(0, node)
     p.write_text(node, "a\nb\n")
     assert p.doc_path(node).read_bytes() == b"a\nb\n"
+
+
+def test_kinds_from_a_newer_version_are_kept(qapp, tmp_path):
+    import json
+
+    from PySide6.QtCore import QSettings
+
+    from conftest import dispose
+    from screenwriter.mainwindow import MainWindow
+
+    project = Project.create(tmp_path / "Newer", "Newer")
+    data = json.loads((project.path / "project.json").read_text())
+    data["binder"].insert(0, {"id": "sword", "title": "Dawnbringer", "kind": "spaceship"})
+    (project.path / "project.json").write_text(json.dumps(data))
+    (project.path / "docs" / "sword.md").write_text("---\nname: Dawnbringer\n---\nA glowing blade.\n")
+
+    QSettings().clear()
+    w = MainWindow()
+    w.open_project(project.path)
+    assert w.project is not None and w.binder.find_item("sword") is not None
+    w.open_document("sword")
+    assert w.editors["sword"].text().endswith("A glowing blade.\n")
+    w.save_all()
+    assert json.loads((project.path / "project.json").read_text())["binder"][0]["kind"] == "spaceship"
+    dispose(w)
+
+
+def test_a_project_that_fails_to_open_does_not_crash(qapp, tmp_path, monkeypatch):
+    from PySide6.QtCore import QSettings
+    from PySide6.QtWidgets import QMessageBox
+
+    from conftest import dispose
+    from screenwriter.mainwindow import MainWindow
+
+    project = Project.create(tmp_path / "Broken", "Broken")
+    before = (project.path / "project.json").read_text()
+    QSettings().clear()
+    w = MainWindow()
+    warnings = []
+    monkeypatch.setattr(QMessageBox, "warning", lambda *a: warnings.append(a[2]))
+    monkeypatch.setattr(w.binder, "load", lambda p: 1 / 0)
+    w.open_project(project.path)
+    assert w.project is None and warnings and "Could not open Broken" in warnings[0]
+    assert w.stack.currentWidget() is w.welcome
+    assert (project.path / "project.json").read_text() == before  # nothing written over it
+    dispose(w)
