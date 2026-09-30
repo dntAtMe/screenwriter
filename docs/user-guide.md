@@ -406,6 +406,8 @@ Select what to export in the binder and choose **File → Export…** (`Ctrl+E`)
 - **Bookmarks**: **View → Toggle Bookmark** (`Ctrl+Shift+K`) marks the line you're on with a ribbon in the margin.
   `F2` / `Shift+F2` go to the next / previous bookmark across the whole project, **View → Bookmarks…** lists them,
   and they show up in Go to Document too (🔖). A bookmark stays with its line as you write around it.
+  They're also listed under the binder, in **Bookmarks** (drag the line above it to resize): click one to go
+  there, right-click to remove it.
 - **Links between documents**: write a document's title in double brackets — `[[Chapter 3 — The Storm]]` — and it
   becomes a link: `Ctrl`-click it to open that document (or a folder's corkboard). Typing `[[` offers the titles.
   Links are notes, so they're never printed or exported; a `[[note]]` that doesn't name a document stays a note.

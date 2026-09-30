@@ -13,6 +13,7 @@ All notable changes to Screenwriter are listed here. The format follows
 - **Pick up where you left off**: documents reopen at the cursor and scroll position you left them at.
 - **Bookmarks**: ⌘⇧K marks a line with a ribbon in the margin; F2 / ⇧F2 jump between bookmarks across the
   project; they're listed under View ▸ Bookmarks… and in Go to Document, and stay with their line as you edit.
+  A **Bookmarks** list sits under the binder — drag the line above it to make it taller or shorter.
 - **Links between documents**: `[[Chapter 3]]` opens that document on ⌘/Ctrl-click, in prose, notes and scripts;
   typing `[[` offers the titles. Like every note, links are never exported.
 - **Typewriter scrolling** (View ▸ Typewriter Scrolling, ⌃⌥T): the line you're typing stays in the middle.

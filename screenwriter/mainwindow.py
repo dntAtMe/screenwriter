@@ -341,6 +341,7 @@ class MainWindow(QMainWindow):
         self.bible_timer = QTimer(self, singleShot=True, interval=600)
         self.bible_timer.timeout.connect(self._refresh_bible)
         self.binder.structureChanged.connect(self.bible_timer.start)
+        self.binder.structureChanged.connect(self._refresh_bookmark_list)  # renamed, moved, trashed
         self.outline_timer = QTimer(self, singleShot=True, interval=300)
         self.outline_timer.timeout.connect(self._refresh_outline)
 
@@ -458,11 +459,52 @@ class MainWindow(QMainWindow):
         header.addWidget(title)
         header.addStretch()
         header.addWidget(self.binder_add)
+        top = QWidget()
+        top_layout = QVBoxLayout(top)
+        top_layout.setContentsMargins(0, 0, 0, 0)
+        top_layout.setSpacing(0)
+        top_layout.addLayout(header)
+        top_layout.addWidget(self.binder, 1)
+
+        # bookmarks under the binder; drag the line between them to resize
+        self.bookmarks_title = QLabel("BOOKMARKS")
+        self.bookmarks_title.setObjectName("PanelHeader")
+        self.bookmarks_title.setToolTip("Ctrl+Shift+K bookmarks the line you're on; F2 / Shift+F2 go through them")
+        self.bookmarks_list = QListWidget()
+        self.bookmarks_list.setObjectName("BookmarkList")
+        self.bookmarks_list.setItemDelegate(bookmarks.Delegate(self.bookmarks_list))
+        self.bookmarks_list.setIconSize(QSize(14, 14))
+        self.bookmarks_list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.bookmarks_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.bookmarks_list.customContextMenuRequested.connect(self._bookmark_menu)
+        self.bookmarks_list.itemClicked.connect(self._open_bookmark_item)
+        self.bookmarks_list.itemActivated.connect(self._open_bookmark_item)
+        bottom = QWidget()
+        bottom_layout = QVBoxLayout(bottom)
+        bottom_layout.setContentsMargins(0, 0, 0, 0)
+        bottom_layout.setSpacing(0)
+        bottom_layout.addWidget(self.bookmarks_title)
+        bottom_layout.addWidget(self.bookmarks_list, 1)
+
+        self.binder_split = QSplitter(Qt.Orientation.Vertical)
+        self.binder_split.setObjectName("BinderSplit")
+        self.binder_split.setChildrenCollapsible(False)
+        self.binder_split.setHandleWidth(5)
+        self.binder_split.addWidget(top)
+        self.binder_split.addWidget(bottom)
+        self.binder_split.setStretchFactor(0, 1)
+        self.binder_split.setStretchFactor(1, 0)
+        bottom.setMinimumHeight(56)
+        if not self.binder_split.restoreState(self.settings.value("binder_split", b"")):
+            self.binder_split.setSizes([600, 150])
+        self.binder_split.splitterMoved.connect(
+            lambda *_: self.settings.setValue("binder_split", self.binder_split.saveState()))
+
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
-        layout.addLayout(header)
-        layout.addWidget(self.binder, 1)
+        layout.addWidget(self.binder_split, 1)
+        self._refresh_bookmark_list()
         return panel
 
     def _new_menu(self) -> QMenu:
@@ -769,6 +811,7 @@ class MainWindow(QMainWindow):
         self.close_project()
         self.project = project
         self.bookmarks = bookmarks.load(self.settings, project.id)
+        self._refresh_bookmark_list()
         self.binder.load(project)
         self.history = ProjectHistory(project.path)
         self.history.person = self.person_name()
@@ -830,6 +873,7 @@ class MainWindow(QMainWindow):
             self._remove_tab(0)
         self.project = None
         self.binder.clear()
+        self._refresh_bookmark_list()
         self.stack.setCurrentWidget(self.welcome)
         self.welcome.set_recent(self._recent())
         self._set_project_actions_enabled(False)
@@ -1987,6 +2031,61 @@ class MainWindow(QMainWindow):
         if self.project is not None:
             self.bookmarks = self._all_bookmarks()
             bookmarks.save(self.settings, self.project.id, self.bookmarks)
+        self._refresh_bookmark_list()
+
+    def _refresh_bookmark_list(self) -> None:
+        """The Bookmarks list under the binder: each bookmarked line, and the document it's in."""
+        targets = self._bookmark_targets() if self.project is not None else []
+        shown = [(t.node_id, t.line, t.title, t.detail) for t in targets]
+        if shown == getattr(self, "_bookmarks_shown", None):
+            return
+        self._bookmarks_shown = shown
+        self.bookmarks_list.clear()
+        for t in targets:
+            item = QListWidgetItem(self.binder.icons[t.kind], t.title.removeprefix("🔖 "))
+            item.setData(Qt.ItemDataRole.UserRole, Target(item.text(), self._node_title(t.node_id), t.kind,
+                                                          t.node_id, line=t.line))
+            item.setToolTip(f"{t.title.removeprefix('🔖 ')}\n{t.detail}")
+            self.bookmarks_list.addItem(item)
+        if not targets:
+            hint = QListWidgetItem("Ctrl+Shift+K marks the line you're on")
+            hint.setFlags(Qt.ItemFlag.NoItemFlags)
+            self.bookmarks_list.addItem(hint)
+        self.bookmarks_title.setText(f"BOOKMARKS  {len(targets)}" if targets else "BOOKMARKS")
+
+    def _open_bookmark_item(self, item: QListWidgetItem) -> None:
+        if (target := item.data(Qt.ItemDataRole.UserRole)) is not None:
+            self._go_to_bookmark(bookmarks.Bookmark(target.node_id, target.line, ""))
+
+    def _bookmark_menu(self, pos) -> None:
+        item = self.bookmarks_list.itemAt(pos)
+        target = item.data(Qt.ItemDataRole.UserRole) if item else None
+        menu = QMenu(self)
+        if target is not None:
+            menu.addAction("Go to Bookmark", lambda: self._open_bookmark_item(item))
+            menu.addAction("Remove Bookmark", lambda: self.remove_bookmark(target.node_id, target.line))
+            menu.addSeparator()
+        clear = menu.addAction("Remove All Bookmarks", self.clear_bookmarks)
+        clear.setEnabled(bool(self.bookmarks))
+        menu.exec(self.bookmarks_list.viewport().mapToGlobal(pos))
+
+    def remove_bookmark(self, node_id: str, line: int) -> None:
+        editor = self.editors.get(node_id)
+        box = self._text_widget(editor) if editor is not None else None
+        if box is not None and hasattr(box, "bookmark_cursors"):
+            box.bookmark_cursors = [c for c in box.bookmark_cursors if c.block().blockNumber() != line]
+            box.bookmark_gutter.refresh()
+        else:
+            self.bookmarks = [b for b in self.bookmarks if (b.doc, b.line) != (node_id, line)]
+        self._store_bookmarks()
+
+    def clear_bookmarks(self) -> None:
+        for editor in self.editors.values():
+            if (box := self._text_widget(editor)) is not None and hasattr(box, "bookmark_cursors"):
+                box.bookmark_cursors = []
+                box.bookmark_gutter.refresh()
+        self.bookmarks = []
+        self._store_bookmarks()
 
     def toggle_bookmark(self) -> None:
         editor = self.tabs.currentWidget()

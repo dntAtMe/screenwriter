@@ -75,3 +75,40 @@ def test_saved_bookmarks_find_their_line_again(qapp):
     assert bookmarks.lines(editor) == [(4, "The storm breaks.")]
     assert bookmarks.label("## The storm") == "The storm" and bookmarks.label("  ") == "(empty line)"
     editor.deleteLater()
+
+
+def test_bookmarks_list_under_the_binder(qapp, sample_project):
+    from PySide6.QtCore import Qt
+
+    from screenwriter.mainwindow import MainWindow
+
+    QSettings().clear()
+    w = MainWindow()
+    w.open_project(sample_project)
+    listed = lambda: [w.bookmarks_list.item(i).text() for i in range(w.bookmarks_list.count())
+                      if w.bookmarks_list.item(i).data(Qt.ItemDataRole.UserRole) is not None]
+    assert listed() == [] and w.bookmarks_list.count() == 1  # a hint
+    assert w.binder_split.widget(1).isAncestorOf(w.bookmarks_list)  # resizable, below the binder
+
+    w.open_document("ch02")
+    ch02 = w.editors["ch02"]
+    _to_line(ch02, 2)
+    w.toggle_bookmark()
+    line = ch02.document().findBlockByNumber(2).text()
+    assert listed() == [bookmarks.label(line)] and w.bookmarks_title.text() == "BOOKMARKS  1"
+    target = w.bookmarks_list.item(0).data(Qt.ItemDataRole.UserRole)
+    assert target.detail == w.project.find("ch02").title
+
+    _to_line(ch02, 0)
+    w._open_bookmark_item(w.bookmarks_list.item(0))
+    assert _line(ch02) == 2
+
+    w.binder.rename("ch02", "Fog Bank")  # the list follows the binder
+    assert w.bookmarks_list.item(0).data(Qt.ItemDataRole.UserRole).detail == "Fog Bank"
+
+    w.remove_bookmark("ch02", 2)
+    assert listed() == [] and bookmarks.lines(ch02) == []
+    w.close_project()
+    assert w.bookmarks_list.count() == 1
+    QSettings().clear()
+    dispose(w)

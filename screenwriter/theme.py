@@ -151,6 +151,12 @@ QToolButton#SyncPill { border: 1px solid @border_strong; border-radius: 12px; pa
 
 /* the binder */
 QWidget#BinderPanel { background: @sidebar; border-right: 1px solid @border; }
+QSplitter#BinderSplit::handle { background: @sidebar; border-top: 1px solid @border; }
+QSplitter#BinderSplit::handle:hover { border-top: 1px solid @border_strong; }
+QListWidget#BookmarkList { background: @sidebar; border: none; padding: 0 6px 6px 4px; }
+QListWidget#BookmarkList::item { padding: 3px 4px; border-radius: 6px; color: @text; }
+QListWidget#BookmarkList::item:hover { background: @hover; }
+QListWidget#BookmarkList::item:selected { background: @row_selected; color: @text; }
 QLabel#PanelHeader { color: @muted; font-size: 11px; font-weight: 600; padding: 10px 8px 4px 14px; }
 QToolButton#PanelButton { border-radius: 6px; padding: 3px; margin: 6px 6px 0 0; }
 QToolButton#PanelButton:hover { background: @hover; }

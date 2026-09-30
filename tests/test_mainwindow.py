@@ -723,3 +723,21 @@ def test_documents_reopen_where_you_were(qapp, sample_project):
     assert w.editors["ch02"].textCursor().selectionStart() == 3
     QSettings().clear()
     dispose(w)
+
+
+def test_opening_a_script_does_not_mark_it_unsaved(qapp, sample_project):
+    from PySide6.QtCore import QSettings
+
+    from screenwriter.mainwindow import UNSAVED_DOT, MainWindow
+
+    QSettings().clear()
+    w = MainWindow()
+    w.show()
+    w.open_project(sample_project)
+    w.open_document("pilot")
+    editor = w.editors["pilot"]
+    editor._layout_timer.timeout.emit()  # the layout pass after opening
+    editor._refresh_timer.timeout.emit()
+    qapp.processEvents()
+    assert not w.tabs.tabText(w.tabs.indexOf(editor)).endswith(UNSAVED_DOT)
+    dispose(w)

@@ -11,9 +11,9 @@ from __future__ import annotations
 import json
 from dataclasses import asdict, dataclass
 
-from PySide6.QtCore import QEvent, QPointF, Qt, QTimer
-from PySide6.QtGui import QColor, QPainter, QTextCursor
-from PySide6.QtWidgets import QWidget
+from PySide6.QtCore import QEvent, QPointF, QRect, QSize, Qt, QTimer
+from PySide6.QtGui import QColor, QPainter, QPalette, QTextCursor
+from PySide6.QtWidgets import QApplication, QStyle, QStyledItemDelegate, QWidget
 
 from .live import find_line
 
@@ -129,3 +129,45 @@ class Gutter(QWidget):
                       QPointF(x + w / 2, top + h - w / 2.5), QPointF(x, top + h)]
             painter.drawPolygon(ribbon)
         painter.end()
+
+
+class Delegate(QStyledItemDelegate):
+    """A bookmark in the sidebar list: the line, and the document it's in below it in grey."""
+
+    def paint(self, painter, option, index):
+        self.initStyleOption(option, index)
+        target = index.data(Qt.ItemDataRole.UserRole)
+        style = option.widget.style() if option.widget else QApplication.style()
+        text, option.text = option.text, ""
+        style.drawControl(QStyle.ControlElement.CE_ItemViewItem, option, painter, option.widget)
+        if target is None:  # the hint when there are none
+            painter.save()
+            grey = QColor(option.palette.color(QPalette.ColorRole.Text))
+            grey.setAlphaF(0.5)
+            painter.setPen(grey)
+            painter.drawText(option.rect.adjusted(8, 0, -4, 0), Qt.AlignmentFlag.AlignVCenter | Qt.TextFlag.TextWordWrap, text)
+            painter.restore()
+            return
+        rect = style.subElementRect(QStyle.SubElement.SE_ItemViewItemText, option, option.widget).adjusted(2, 0, -4, 0)
+        metrics = option.fontMetrics
+        half = rect.height() // 2
+        painter.save()
+        painter.setPen(option.palette.color(QPalette.ColorRole.Text))
+        top = QRect(rect.left(), rect.top(), rect.width(), half)
+        painter.drawText(top, Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignLeft,
+                         metrics.elidedText(text, Qt.TextElideMode.ElideRight, rect.width()))
+        small = option.font
+        small.setPointSizeF(small.pointSizeF() * 0.85)
+        painter.setFont(small)
+        grey = QColor(option.palette.color(QPalette.ColorRole.Text))
+        grey.setAlphaF(0.55)
+        painter.setPen(grey)
+        bottom = QRect(rect.left(), rect.top() + half, rect.width(), rect.height() - half)
+        painter.drawText(bottom, Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft,
+                         painter.fontMetrics().elidedText(target.detail, Qt.TextElideMode.ElideRight, rect.width()))
+        painter.restore()
+
+    def sizeHint(self, option, index):
+        size = super().sizeHint(option, index)
+        lines = 1 if index.data(Qt.ItemDataRole.UserRole) is None else 2
+        return QSize(size.width(), option.fontMetrics.height() * lines + 10)

@@ -323,7 +323,7 @@ class ScreenplayEditor(TextDocumentAPI, QTextEdit):
         self._refresh_timer.start()
 
     def _full_refresh(self) -> None:
-        self.highlighter.rehighlight()
+        quiet_rehighlight(self)  # formats only; the edit that led here has already said textChanged
         self._apply_layout()
 
     def _refresh_blocks(self, *numbers: int) -> None:
@@ -347,6 +347,7 @@ class ScreenplayEditor(TextDocumentAPI, QTextEdit):
         if self._applying:
             return
         self._applying = True
+        blocked = self.blockSignals(True)  # indents only: not an edit (no textChanged, so not "unsaved")
         cw = self._indent_unit()
         cursor = None
         block = self.document().begin()
@@ -373,6 +374,7 @@ class ScreenplayEditor(TextDocumentAPI, QTextEdit):
         if cursor is not None:
             cursor.endEditBlock()
         self._laid_out_unit = cw
+        self.blockSignals(blocked)
         self._applying = False
 
     def zoom(self, steps: int) -> None:
