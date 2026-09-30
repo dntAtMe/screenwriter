@@ -15,7 +15,7 @@ from ..bible import LABELS, BibleIndex
 from .. import fonts
 from ..fountain import OutlineItem
 from ..marks import MARK_RE
-from .. import secrets
+from .. import dice, secrets
 from .biblemenu import add_bible_menu, add_mark_menu
 from .spellmenu import add_comment_action, add_spelling_menu
 from .common import (
@@ -30,6 +30,7 @@ from .common import (
 )
 
 COLUMN_CHARS = 70
+DICE_COLOR = "#3b82c4"  # 2d6+3 in notes: ⌘/Ctrl-click to roll
 WORD_BEFORE_RE = re.compile(r"[\w'’-]+$")
 
 
@@ -62,6 +63,7 @@ class MarkdownHighlighter(QSyntaxHighlighter):
             "note": _fmt(italic=True, color="#8a8f98"),
             "quote": _fmt(italic=True, color="#7a7f88"),
             "marker": _fmt(color="#9aa0a8"),
+            "dice": _fmt(bold=True, color=DICE_COLOR),
         }
         self.bible = BibleIndex()
         self.spell = None  # the SpellService, set by the window
@@ -88,6 +90,8 @@ class MarkdownHighlighter(QSyntaxHighlighter):
         for regex, name in self.INLINE:
             for m in regex.finditer(text):
                 self.setFormat(m.start(), m.end() - m.start(), self.formats[name])
+        for m in dice.find(text):
+            self.setFormat(m.start(), m.end() - m.start(), self.formats["dice"])
         tag = _fmt(color="#a0a4ab", scale=0.72, base=self.base_font)  # (follows zoom)
         for m in MARK_RE.finditer(text):  # {the hooded figure|Xardas}: the tag faint, the phrase as written
             self.setFormat(m.start(), 1, tag)
@@ -135,6 +139,8 @@ class ProseEditor(TextDocumentAPI, QPlainTextEdit):
     bibleOpenRequested = Signal(str)  # entry node id
     bibleAddRequested = Signal(str, str)  # kind, name
     bibleAliasRequested = Signal(str, str)  # entry node id, another name for it
+    diceRollRequested = Signal(str)  # a dice expression: "2d6+3"
+    tableRollRequested = Signal(object)  # a dice.Table to roll on
     addWordRequested = Signal(str)  # to the project dictionary
     commentRequested = Signal()  # on the selected text
 
@@ -195,21 +201,51 @@ class ProseEditor(TextDocumentAPI, QPlainTextEdit):
                     f"<b>{html.escape(entry.name)}</b> · {kind}{summary}<br><i>⌘/Ctrl-click to open</i>",
                     self.viewport(),
                 )
+            elif found := self.dice_at(e.pos()):
+                expression, table = found
+                what = f"Roll on “{html.escape(table.title)}”" if table else f"Roll {html.escape(expression)}"
+                QToolTip.showText(e.globalPos(), f"<b>{what}</b><br><i>⌘/Ctrl-click</i>", self.viewport())
             else:
                 QToolTip.hideText()
             return True
         return super().viewportEvent(e)
+
+    # --- dice ----------------------------------------------------------------------------
+
+    def dice_at(self, pos) -> tuple[str, dice.Table | None] | None:
+        """(expression, table) for dice at a viewport position; the table when it's
+        the die heading a random table ("| d6 | Rumour |")."""
+        cursor = self.cursorForPosition(pos)
+        offset = cursor.positionInBlock()
+        for m in dice.find(cursor.block().text()):
+            if m.start() <= offset <= m.end():
+                table = dice.table_at(self.toPlainText(), cursor.blockNumber())
+                is_header = table is not None and table.line == cursor.blockNumber()
+                return m.group(0), table if is_header else None
+        return None
+
+    def _roll_at(self, pos) -> bool:
+        if found := self.dice_at(pos):
+            expression, table = found
+            if table is not None:
+                self.tableRollRequested.emit(table)
+            else:
+                self.diceRollRequested.emit(expression)
+            return True
+        return False
 
     def mousePressEvent(self, e):
         if e.modifiers() & Qt.KeyboardModifier.ControlModifier and e.button() == Qt.MouseButton.LeftButton:
             if entry := self.bible_at(e.position().toPoint()):
                 self.bibleOpenRequested.emit(entry.node_id)
                 return
+            if self._roll_at(e.position().toPoint()):
+                return
         super().mousePressEvent(e)
 
     def mouseMoveEvent(self, e):
         pos = e.position().toPoint()
-        over = e.modifiers() & Qt.KeyboardModifier.ControlModifier and self.bible_at(pos)
+        over = e.modifiers() & Qt.KeyboardModifier.ControlModifier and (self.bible_at(pos) or self.dice_at(pos))
         self.viewport().setCursor(Qt.CursorShape.PointingHandCursor if over else Qt.CursorShape.IBeamCursor)
         update_name_hover(self, self.highlighter, self.bible, pos)
         super().mouseMoveEvent(e)
@@ -229,6 +265,15 @@ class ProseEditor(TextDocumentAPI, QPlainTextEdit):
         add_spelling_menu(menu, self, self.highlighter.spell, self.cursorForPosition(e.pos()).position(),
                           self.addWordRequested.emit)
         add_comment_action(menu, self, self.commentRequested.emit)
+        line = self.cursorForPosition(e.pos()).blockNumber()
+        if table := dice.table_at(self.toPlainText(), line):
+            action = menu.addAction(f"Roll on “{table.title}” ({table.die})")
+            action.triggered.connect(lambda: self.tableRollRequested.emit(table))
+            menu.insertAction(menu.actions()[0], action)
+        if (found := self.dice_at(e.pos())) and found[1] is None:
+            action = menu.addAction(f"Roll {found[0]}")
+            action.triggered.connect(lambda: self.diceRollRequested.emit(found[0]))
+            menu.insertAction(menu.actions()[0], action)
         if entry:
             first = menu.actions()[0]
             action = menu.addAction(f"Open “{entry.name}” in Story Bible")

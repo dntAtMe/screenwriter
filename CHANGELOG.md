@@ -22,6 +22,11 @@ All notable changes to Screenwriter are listed here. The format follows
   to keep its whole section secret. Secret text gets a faint violet wash in the editor.
 - **Player handouts.** Export offers *Player handout* (PDF or Markdown) for notes, prose, folders and Story Bible
   entries, leaving out GM-only passages, `[[notes]]` and private fields — an NPC exports as a clean card.
+- **Dice.** Rolls written in notes and prose (`d20`, `2d6+3`, `4d6kh3`, `2d20kl1`) are highlighted; ⌘/Ctrl-click
+  one to roll it. A new **Dice** side panel (View ▸ Dice Roller, ⌃⌥0) has quick dice, advantage and
+  disadvantage, a place to type any roll, and a log of everything rolled, with natural 20s and 1s called out.
+- **Random tables.** A Markdown table headed by a die (`| d6 | Rumour |`, rows like `1–2`) can be rolled on:
+  ⌘/Ctrl-click the die, or right-click anywhere in the table.
 
 ### Changed
 - **A new look.** Calm, modern styling in light and dark: soft panel colours, rounded selection, pill-shaped

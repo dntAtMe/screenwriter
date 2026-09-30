@@ -34,6 +34,7 @@ from . import icons
 from .binder import KIND_COLORS, Binder
 from .capture import QuickCapture, append_idea, format_idea
 from .cast import CastPanel
+from .dicepanel import DicePanel
 from .corkboard import CorkboardView
 from .conflictdialog import ConflictDialog
 from .exportdialog import run_export
@@ -331,6 +332,9 @@ class MainWindow(QMainWindow):
         self.comments_panel.resolveRequested.connect(self.resolve_comment)
         self.comments_panel.deleteRequested.connect(self.delete_comment)
         self.side.addTab(self.comments_panel, "Comments", "comment")
+        self.dice = DicePanel()
+        self.dice.rolled.connect(lambda line: self.statusBar().showMessage(line, 8000))
+        self.side.addTab(self.dice, "Dice", "dice")
         self.side.refresh_icons()
         self.side.currentChanged.connect(lambda _: self.side.refresh_icons())
         self.side.currentChanged.connect(lambda _: self._show_comments())
@@ -635,6 +639,7 @@ class MainWindow(QMainWindow):
             self._action(view, "Toggle Binder", self.toggle_binder, "Ctrl+\\"),
             self._action(view, "Toggle Side Panel", self.toggle_side, "Ctrl+Alt+\\"),
             self._action(view, "Outline", self.show_outline, "Ctrl+Shift+O"),
+            self._action(view, "Dice Roller", self.show_dice, "Ctrl+Alt+0"),
             self._action(view, "Corkboard", self.open_selected_corkboard, "Ctrl+Alt+K"),
             self._action(view, "Focus Mode", self.toggle_focus, "Ctrl+Shift+D"),
         ]
@@ -883,6 +888,7 @@ class MainWindow(QMainWindow):
             editor.notes.highlighter.spell = self.spell
             editor.notes.addWordRequested.connect(self.add_spelling_word)
             editor.notes.commentRequested.connect(self.add_comment)
+            self._connect_dice(editor.notes, node_id)
         elif node.kind == BOARD:
             editor = BoardEditor(self._node_title)
             editor.openRequested.connect(self.open_document)
@@ -894,6 +900,7 @@ class MainWindow(QMainWindow):
             editor.highlighter.spell = self.spell
             editor.addWordRequested.connect(self.add_spelling_word)
             editor.commentRequested.connect(self.add_comment)
+            self._connect_dice(editor, node_id)
         editor.node_id = node_id
         editor.set_text(self.project.read_text(node))
         editor.textChanged.connect(self.save_timer.start)
@@ -2205,6 +2212,29 @@ class MainWindow(QMainWindow):
     def show_outline(self) -> None:
         self.side.show()
         self.side.setCurrentWidget(self.outline)
+
+    def show_dice(self) -> None:
+        self.side.show()
+        self.side.setCurrentWidget(self.dice)
+        self.dice.entry.setFocus()
+        self._sync_header_toggles()
+
+    def roll_dice(self, expression: str, source: str = "") -> None:
+        """Roll dice ⌘/Ctrl-clicked in a note, showing the Dice panel with the result."""
+        self.side.show()
+        self.side.setCurrentWidget(self.dice)
+        self.dice.roll(expression, source)
+        self._sync_header_toggles()
+
+    def roll_table(self, table, source: str = "") -> None:
+        self.side.show()
+        self.side.setCurrentWidget(self.dice)
+        self.dice.roll_table(table, source)
+        self._sync_header_toggles()
+
+    def _connect_dice(self, editor: ProseEditor, node_id: str) -> None:
+        editor.diceRollRequested.connect(lambda e: self.roll_dice(e, self._node_title(node_id)))
+        editor.tableRollRequested.connect(lambda t: self.roll_table(t))
 
     def show_search(self) -> None:
         self.side.show()
