@@ -9,8 +9,17 @@ All notable changes to Screenwriter are listed here. The format follows
 ### Added
 - **Open Recent.** Click the project's name in the header (or press ⌃⌥O) to switch to one of your ten most
   recently opened projects; **File ▸ Open Recent** lists them too, with a way to clear the list.
+- **Command palette** (⌘⇧P): run any menu command by typing part of its name.
+- **Pick up where you left off**: documents reopen at the cursor and scroll position you left them at.
+- **Bookmarks**: ⌘⇧K marks a line with a ribbon in the margin; F2 / ⇧F2 jump between bookmarks across the
+  project; they're listed under View ▸ Bookmarks… and in Go to Document, and stay with their line as you edit.
+- **Links between documents**: `[[Chapter 3]]` opens that document on ⌘/Ctrl-click, in prose, notes and scripts;
+  typing `[[` offers the titles. Like every note, links are never exported.
+- **Typewriter scrolling** (View ▸ Typewriter Scrolling, ⌃⌥T): the line you're typing stays in the middle.
+- **Unsaved-changes dot** on tabs while changes wait to be autosaved.
 
 ### Fixed
+- Re-colouring text (new Story Bible names, links, switching light/dark) no longer counts as an edit.
 - A project containing kinds of entries from a newer version of Screenwriter no longer crashes the app on
   start: they open as plain notes and are kept exactly as they are. Any project that can't be opened now
   shows a message and the start screen instead of quitting.

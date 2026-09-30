@@ -50,6 +50,7 @@ from . import spelling
 from .updates import UpdatesPanel, arrived, recent_updates
 from .quickopen import DoubleShift, QuickOpen, Target
 from .commands import CommandPalette
+from . import bookmarks
 from .shortcuthints import ShortcutHints
 from .historydialog import HistoryDialog
 from .projecthistory import ProjectHistory
@@ -288,6 +289,7 @@ class MainWindow(QMainWindow):
 
         self.tabs = TabArea()  # one tab pane, or two when the view is split
         self.tab_history: list[str] = []  # node ids, most recently viewed first
+        self.bookmarks: list[bookmarks.Bookmark] = []  # the project's, as last saved (see bookmarks.py)
         self.tabs.tabCloseRequested.connect(self.close_tab)
         self.tabs.currentChanged.connect(self._on_tab_changed)
 
@@ -647,6 +649,13 @@ class MainWindow(QMainWindow):
         view.addSeparator()
         self.project_actions.append(self._action(view, "Go to Document…", self.quick_open, "Ctrl+P"))
         self.palette_action = self._action(view, "Command Palette…", self.command_palette, "Ctrl+Shift+P")
+        view.addSeparator()
+        self.project_actions += [
+            self._action(view, "Toggle Bookmark", self.toggle_bookmark, "Ctrl+Shift+K"),
+            self._action(view, "Next Bookmark", lambda: self.next_bookmark(1), "F2"),
+            self._action(view, "Previous Bookmark", lambda: self.next_bookmark(-1), "Shift+F2"),
+            self._action(view, "Bookmarks…", self.show_bookmarks),
+        ]
         next_tab = self._action(view, "Next Tab", lambda: self.tabs.next_tab(1))
         next_tab.setShortcuts([QKeySequence("Ctrl+Tab"), QKeySequence("Ctrl+PgDown")])
         prev_tab = self._action(view, "Previous Tab", lambda: self.tabs.next_tab(-1))
@@ -759,6 +768,7 @@ class MainWindow(QMainWindow):
     def _activate(self, project: Project) -> None:
         self.close_project()
         self.project = project
+        self.bookmarks = bookmarks.load(self.settings, project.id)
         self.binder.load(project)
         self.history = ProjectHistory(project.path)
         self.history.person = self.person_name()
@@ -953,6 +963,7 @@ class MainWindow(QMainWindow):
         self._restore_position(editor)
         if (box := self._text_widget(editor)) is not None:
             box.set_links(self._link_titles())
+            bookmarks.attach(box, [(b.line, b.text) for b in self.bookmarks if b.doc == node_id])
         if (box := self._text_widget(editor)) is not None:
             box.typewriter = Typewriter(box)
             box.typewriter.set_enabled(self.typewriter_action.isChecked())
@@ -985,6 +996,7 @@ class MainWindow(QMainWindow):
                 self._show_tab_title(editor)
         self._guess_languages(e.text() for e in self.editors.values() if hasattr(e, "text"))
         self._store_positions()
+        self._store_bookmarks()
         self.save_label.setText(f"✓ Saved {datetime.now():%H:%M}")
 
     # --- history ------------------------------------------------------------------
@@ -1955,7 +1967,76 @@ class MainWindow(QMainWindow):
             if box.textCursor().position() == pos:
                 box.verticalScrollBar().setValue(int(saved[1]))
 
-        QTimer.singleShot(0, scroll)
+        QTimer.singleShot(0, box, scroll)  # (dropped if the tab is closed first)
+
+    # --- bookmarks ------------------------------------------------------------------------
+
+    def _all_bookmarks(self) -> list[bookmarks.Bookmark]:
+        """Every bookmark in binder order: where they are now in open documents, as saved in others."""
+        boxes = {node_id: box for node_id, e in self.editors.items()
+                 if (box := self._text_widget(e)) is not None and hasattr(box, "bookmark_cursors")}
+        found = [b for b in self.bookmarks if b.doc not in boxes]
+        for node_id, box in boxes.items():
+            found += [bookmarks.Bookmark(node_id, n, text) for n, text in bookmarks.lines(box)]
+        nodes = self.binder.to_nodes()
+        trashed = {n.id for t in nodes if t.kind == TRASH for n in walk([t])}
+        order = {n.id: i for i, n in enumerate(walk(nodes)) if n.id not in trashed}
+        return sorted((b for b in found if b.doc in order), key=lambda b: (order[b.doc], b.line))
+
+    def _store_bookmarks(self) -> None:
+        if self.project is not None:
+            self.bookmarks = self._all_bookmarks()
+            bookmarks.save(self.settings, self.project.id, self.bookmarks)
+
+    def toggle_bookmark(self) -> None:
+        editor = self.tabs.currentWidget()
+        box = self._text_widget(editor) if editor is not None else None
+        if box is None:
+            self.statusBar().showMessage("Bookmarks go on a line of text: open a chapter, note or script", 3000)
+            return
+        on = bookmarks.toggle(box)
+        self._store_bookmarks()
+        self.statusBar().showMessage("Bookmarked this line — F2 comes back to it" if on else "Bookmark removed", 3000)
+
+    def next_bookmark(self, step: int = 1) -> None:
+        """F2 / Shift+F2: the next (previous) bookmark after the cursor, across the project."""
+        marks = self._all_bookmarks()
+        if not marks:
+            self.statusBar().showMessage("No bookmarks yet — Ctrl+Shift+K bookmarks the line you're on", 3000)
+            return
+        editor = self.tabs.currentWidget()
+        box = self._text_widget(editor) if editor is not None else None
+        here = (editor.node_id, box.textCursor().blockNumber()) if box is not None else None
+        keys = [(b.doc, b.line) for b in marks]
+        order = {n.id: i for i, n in enumerate(walk(self.binder.to_nodes()))}
+        rank = lambda k: (order.get(k[0], -1), k[1])
+        if here is None:
+            index = 0 if step > 0 else len(marks) - 1
+        elif step > 0:
+            index = next((i for i, k in enumerate(keys) if rank(k) > rank(here)), 0)
+        else:
+            index = next((i for i in reversed(range(len(keys))) if rank(keys[i]) < rank(here)), len(keys) - 1)
+        self._go_to_bookmark(marks[index])
+
+    def _go_to_bookmark(self, mark: bookmarks.Bookmark) -> None:
+        self.open_document(mark.doc)
+        if editor := self.editors.get(mark.doc):
+            editor.jump_to_line(mark.line)
+            editor.setFocus()
+
+    def show_bookmarks(self) -> None:
+        """Every bookmark in a Go to Document list."""
+        if self.project is None:
+            return
+        dialog = QuickOpen(self._bookmark_targets(), self.binder.icons, self)
+        dialog.input.setPlaceholderText("Go to bookmark…")
+        if dialog.exec() and dialog.chosen:
+            self.go_to(dialog.chosen, beside=dialog.beside)
+
+    def _bookmark_targets(self) -> list[Target]:
+        kinds = {n.id: n.kind for n in walk(self.binder.to_nodes())}
+        return [Target(f"🔖 {bookmarks.label(b.text)}", f"Bookmark in {self._node_title(b.doc)}", kinds.get(b.doc, NOTE),
+                       b.doc, line=b.line) for b in self._all_bookmarks()]
 
     def _toggle_typewriter(self) -> None:
         on = self.typewriter_action.isChecked()
@@ -2275,6 +2356,7 @@ class MainWindow(QMainWindow):
                 visit(node.children, f"{path} › {node.title}" if path else node.title)
 
         visit(self.project.root, "")
+        targets += self._bookmark_targets()
         recent = {node_id: i for i, node_id in enumerate(self.tab_history)}
         opened = sorted((t for t in targets if t.is_open), key=lambda t: recent.get(t.node_id, len(recent)))
         return opened + [t for t in targets if not t.is_open]

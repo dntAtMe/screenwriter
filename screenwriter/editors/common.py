@@ -248,7 +248,7 @@ class Typewriter(QObject):
         self.enabled = on
         self._make_room()
         if on:
-            QTimer.singleShot(0, self.center)
+            QTimer.singleShot(0, self, self.center)  # (the timers go with the editor if it closes first)
 
     def _make_room(self) -> None:
         """Space below the last line, so even it can sit in the middle."""
@@ -264,9 +264,9 @@ class Typewriter(QObject):
         if self.enabled:
             if e.type() == QEvent.Type.KeyPress:
                 before = self._state()
-                QTimer.singleShot(0, lambda: self._state() != before and self.center())
+                QTimer.singleShot(0, self, lambda: self._state() != before and self.center())
             elif e.type() == QEvent.Type.Resize and not isinstance(self.editor, QPlainTextEdit):
-                QTimer.singleShot(0, self._make_room)
+                QTimer.singleShot(0, self, self._make_room)
         return False
 
     def center(self) -> None:

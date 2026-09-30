@@ -399,6 +399,18 @@ Select what to export in the binder and choose **File → Export…** (`Ctrl+E`)
   (`chk` finds *Chapter 1 — The Keeper*). Open tabs are listed first, most recent at the top. Add a space to search
   by where things are too — `map lamp` finds a card about the lamp on the *Story Map*. `Shift+Enter` opens the
   pick on the other side of a split view.
+- **Command palette** (`Ctrl+Shift+P`): type part of what you want to do — *typew*, *export*, *dark* — and press
+  `Enter` to run it. Every menu command is there, with where it lives and its shortcut.
+- **Pick up where you left off**: each document reopens with the cursor and scroll position you left it at
+  (remembered on this computer, even after closing the tab or the app).
+- **Bookmarks**: **View → Toggle Bookmark** (`Ctrl+Shift+K`) marks the line you're on with a ribbon in the margin.
+  `F2` / `Shift+F2` go to the next / previous bookmark across the whole project, **View → Bookmarks…** lists them,
+  and they show up in Go to Document too (🔖). A bookmark stays with its line as you write around it.
+- **Links between documents**: write a document's title in double brackets — `[[Chapter 3 — The Storm]]` — and it
+  becomes a link: `Ctrl`-click it to open that document (or a folder's corkboard). Typing `[[` offers the titles.
+  Links are notes, so they're never printed or exported; a `[[note]]` that doesn't name a document stays a note.
+- **Unsaved changes**: a dot after a tab's name (`Chapter 1  •`) means it has changes that are about to be saved;
+  it goes away a moment after you stop typing, once they're on disk.
 - **Switch tabs** with `Ctrl+Tab` / `Ctrl+Shift+Tab` (or `Ctrl+PgDown` / `Ctrl+PgUp`); `Alt+1` … `Alt+8` go to a
   tab by position, `Alt+9` to the last one.
 - **Split view**: **View → Split Right** (`Ctrl+Alt+R`) puts the current tab beside the others; **Split Down**
@@ -410,6 +422,9 @@ Select what to export in the binder and choose **File → Export…** (`Ctrl+E`)
   ![A script and its lead character's Story Bible entry side by side](images/split.png)
 
 - **Focus mode** (`Ctrl+Shift+D`) hides everything but the page. Press it again to come back.
+- **Typewriter scrolling** (**View → Typewriter Scrolling**, `Ctrl+Alt+T`) keeps the line you're typing in the
+  middle of the window instead of at the bottom edge, in prose, notes and scripts. Clicking elsewhere doesn't
+  scroll; the next key you press brings that line to the middle.
 - **Full screen**: **View → Full Screen**.
 - **Zoom** (`Ctrl++` / `Ctrl+-`) changes the text size of the current document.
 - **Appearance**: **View → Appearance** — *Follow System*, *Light* or *Dark* (warm dark greys, easy on the eyes
@@ -449,6 +464,9 @@ press the key you want, or let go, and it disappears. With `Alt` it also shows t
 | Screenplay element | `Ctrl+1` … `Ctrl+6` |
 | **View** | |
 | Go to document | `Shift` `Shift` or `Ctrl+P` |
+| Command palette | `Ctrl+Shift+P` |
+| Toggle bookmark / next / previous | `Ctrl+Shift+K` / `F2` / `Shift+F2` |
+| Typewriter scrolling | `Ctrl+Alt+T` |
 | Next / previous tab | `Ctrl+Tab` / `Ctrl+Shift+Tab` (`Ctrl+PgDown` / `Ctrl+PgUp`) |
 | Tab 1–8 / last tab | `Alt+1` … `Alt+8` / `Alt+9` |
 | Split right / down / unsplit | `Ctrl+Alt+R` / `Ctrl+Alt+D` / `Ctrl+Alt+W` |
