@@ -6,6 +6,11 @@ All notable changes to Screenwriter are listed here. The format follows
 
 ## [Unreleased]
 
+### Added
+- **Factions and Items** in the Story Bible, next to Characters and Locations: guilds, cults and kingdoms
+  with their leader and aims; artefacts and treasure with their type, rarity and who holds them. Their
+  names are found and highlighted in your writing like any other entry (Insert ▸ New Faction ⌥⌃F / New Item ⌥⌃I).
+
 ### Changed
 - **A new look.** Calm, modern styling in light and dark: soft panel colours, rounded selection, pill-shaped
   tabs, thin scrollbars and one ink-blue accent, the same on macOS, Windows and Linux.

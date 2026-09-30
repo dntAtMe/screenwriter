@@ -25,7 +25,8 @@ from PySide6.QtWidgets import (
 from .bible import entry_summary
 from .editors.common import word_count
 from .fountain import OutlineItem
-from .project import BIBLE_KINDS, BOARD, CHARACTER, FOLDER, LOCATION, NOTE, PROSE, SCREENPLAY, Node
+from .bible import LABELS as BIBLE_LABELS
+from .project import BIBLE_KINDS, BOARD, FOLDER, NOTE, PROSE, SCREENPLAY, Node
 
 LABELS = {
     "red": "#d9534f",
@@ -229,7 +230,7 @@ class CorkboardView(QListWidget):
         if node.kind in (PROSE, NOTE, SCREENPLAY):
             n = word_count(self.text_of(node))
             return f"{n:,} word{'s' if n != 1 else ''}"
-        return {BOARD: "Board", CHARACTER: "Character", LOCATION: "Location"}.get(node.kind, "")
+        return {BOARD: "Board", **BIBLE_LABELS}.get(node.kind, "")
 
     def ids(self) -> list[str]:
         return [self.item(i).data(ID_ROLE) for i in range(self.count())]
@@ -288,7 +289,7 @@ class CorkboardView(QListWidget):
             menu.addSeparator()
         new = menu.addMenu("New")
         for kind, label in ((PROSE, "Prose Document"), (SCREENPLAY, "Screenplay"), (NOTE, "Note"),
-                            (CHARACTER, "Character"), (LOCATION, "Location"), (FOLDER, "Folder")):
+                            *BIBLE_LABELS.items(), (FOLDER, "Folder")):
             action = QAction(self.icons[kind], label, new)
             action.triggered.connect(lambda _=False, k=kind: self.add_card(k))
             new.addAction(action)

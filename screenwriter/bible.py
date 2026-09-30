@@ -23,7 +23,17 @@ from dataclasses import dataclass, field
 from .marks import MARK_RE, Mention, masked, stands_for, strip_marks
 from .fountain import El, character_name, parse
 
-CHARACTER, LOCATION = "character", "location"
+from .project import BIBLE_KINDS, CHARACTER, FACTION, ITEM, LOCATION
+
+LABELS = {CHARACTER: "Character", LOCATION: "Location", FACTION: "Faction", ITEM: "Item"}
+PLURALS = {CHARACTER: "Characters", LOCATION: "Locations", FACTION: "Factions", ITEM: "Items"}
+COLORS = {CHARACTER: "#c07a2c", LOCATION: "#2f8a86", FACTION: "#b0466c", ITEM: "#a0801c"}  # icons and name tints
+ALIAS_HINTS = {
+    CHARACTER: "Other names, comma-separated: MARA, the keeper",
+    LOCATION: "Other names, comma-separated: LAMP ROOM, the tower",
+    FACTION: "Other names, comma-separated: the Guild, Zhents",
+    ITEM: "Other names, comma-separated: the blade, Dawnbringer",
+}
 
 # (key, label) in form order
 FIELDS = {
@@ -37,6 +47,22 @@ FIELDS = {
     LOCATION: [
         ("name", "Name"),
         ("aliases", "Also called"),
+        ("description", "Description"),
+    ],
+    FACTION: [
+        ("name", "Name"),
+        ("aliases", "Also called"),
+        ("type", "Kind"),
+        ("leader", "Leader"),
+        ("goal", "Wants"),
+        ("description", "Description"),
+    ],
+    ITEM: [
+        ("name", "Name"),
+        ("aliases", "Also called"),
+        ("type", "Type"),
+        ("rarity", "Rarity"),
+        ("owner", "Held by"),
         ("description", "Description"),
     ],
 }
@@ -247,6 +273,12 @@ def location_report(names: list[str], docs: list[Document]) -> Report:
                     Appearance(doc_id, title, offsets[i] + m.start(), m.end() - m.start(), i, line.strip().lstrip(".").upper())
                 )
     return report
+
+
+def report(kind: str, names: list[str], docs: list[Document]) -> Report:
+    """Where an entry of any kind turns up: scenes set at a location, a character's
+    speeches and mentions, mentions of anything else."""
+    return location_report(names, docs) if kind == LOCATION else character_report(names, docs)
 
 
 def known_names(entries: list[tuple[str, str]]) -> tuple[list[str], list[str]]:

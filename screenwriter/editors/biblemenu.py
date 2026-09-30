@@ -9,7 +9,7 @@ from typing import Callable
 from PySide6.QtGui import QTextCursor
 from PySide6.QtWidgets import QMenu
 
-from ..bible import CHARACTER, LOCATION, BibleIndex
+from ..bible import CHARACTER, LABELS, BibleIndex
 from ..marks import MARK_RE, mark, masked, stands_for, stands_for_note
 
 
@@ -23,17 +23,19 @@ def add_bible_menu(
     """Insert, at the top of `menu`, a submenu to create an entry from `name`
     or record `name` as another form of an existing entry (e.g. "Kacprowi" for Kacper)."""
     sub = QMenu(f"Add “{name}” to Story Bible", menu)
-    sub.addAction("as a new Character", lambda: on_new(CHARACTER, name))
-    sub.addAction("as a new Location", lambda: on_new(LOCATION, name))
+    for kind, label in LABELS.items():
+        sub.addAction(f"as a new {label}", lambda _=False, k=kind: on_new(k, name))
     others = [e for e in index.entries if name.lower() not in (n.lower() for n in e.names)]
     if others:
         sub.addSeparator()
         header = sub.addAction("as another name for:")
         header.setEnabled(False)
-        for kind in (CHARACTER, LOCATION):
+        shown = False
+        for kind in LABELS:
             group = sorted((e for e in others if e.kind == kind), key=lambda e: e.name.lower())
-            if kind == LOCATION and group and len(group) != len(others):
+            if shown and group:
                 sub.addSeparator()
+            shown = shown or bool(group)
             for entry in group:
                 sub.addAction(f"   {entry.name}", lambda _=False, i=entry.node_id: on_alias(i, name))
     first = menu.actions()[0] if menu.actions() else None

@@ -104,6 +104,19 @@ def _location(p: QPainter) -> None:  # a map pin
     p.drawEllipse(QPointF(12, 9.5), 2.6, 2.6)
 
 
+@drawing("faction")
+def _faction(p: QPainter) -> None:  # a banner on a pole
+    p.drawLine(QPointF(5, 21), QPointF(5, 3))
+    p.drawPath(_path((5, 4), (19, 4), (16, 8.5), (19, 13), (5, 13)))
+
+
+@drawing("item")
+def _item(p: QPainter) -> None:  # a cut gem
+    p.drawPath(_path((7, 4), (17, 4), (21, 9), (12, 20.5), (3, 9), close=True))
+    p.drawLine(QPointF(3, 9), QPointF(21, 9))
+    p.drawPath(_path((9.5, 4), (8, 9), (12, 20.5), (16, 9), (14.5, 4)))
+
+
 @drawing("folder")
 def _folder(p: QPainter) -> None:
     p.drawPath(_path((3, 6.5), (3, 19), (21, 19), (21, 8.5), (12.5, 8.5), (10.5, 5.5), (4, 5.5), (3, 6.5), close=True))

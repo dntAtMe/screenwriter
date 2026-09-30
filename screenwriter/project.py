@@ -23,12 +23,12 @@ PROJECT_FILE = "project.json"
 DOCS_DIR = "docs"
 
 FOLDER, PROSE, SCREENPLAY, NOTE, BOARD, TRASH = "folder", "prose", "screenplay", "note", "board", "trash"
-CHARACTER, LOCATION = "character", "location"  # story bible entries (see bible.py)
-BIBLE_KINDS = (CHARACTER, LOCATION)
-DOCUMENT_KINDS = (PROSE, SCREENPLAY, NOTE, BOARD, CHARACTER, LOCATION)
+CHARACTER, LOCATION, FACTION, ITEM = "character", "location", "faction", "item"  # story bible entries (see bible.py)
+BIBLE_KINDS = (CHARACTER, LOCATION, FACTION, ITEM)
+DOCUMENT_KINDS = (PROSE, SCREENPLAY, NOTE, BOARD, *BIBLE_KINDS)
 EXTENSIONS = {
     PROSE: ".md", NOTE: ".md", SCREENPLAY: ".fountain", BOARD: ".board.json",
-    CHARACTER: ".md", LOCATION: ".md",
+    **{kind: ".md" for kind in BIBLE_KINDS},
 }
 
 

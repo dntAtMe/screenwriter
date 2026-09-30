@@ -11,7 +11,7 @@ from PySide6.QtCore import QEvent, QStringListModel, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QSyntaxHighlighter, QTextCharFormat, QTextCursor
 from PySide6.QtWidgets import QCompleter, QFrame, QPlainTextEdit, QToolTip
 
-from ..bible import CHARACTER, BibleIndex
+from ..bible import LABELS, BibleIndex
 from .. import fonts
 from ..fountain import OutlineItem
 from ..marks import MARK_RE
@@ -158,7 +158,7 @@ class ProseEditor(TextDocumentAPI, QPlainTextEdit):
     def viewportEvent(self, e):
         if e.type() == QEvent.Type.ToolTip:
             if entry := self.bible_at(e.pos()):
-                kind = "Character" if entry.kind == CHARACTER else "Location"
+                kind = LABELS.get(entry.kind, "")
                 summary = f"<br>{html.escape(entry.summary)}" if entry.summary else ""
                 QToolTip.showText(
                     e.globalPos(),

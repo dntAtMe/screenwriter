@@ -1,5 +1,7 @@
 from screenwriter.bible import (
     CHARACTER,
+    BibleIndex,
+    all_names,
     LOCATION,
     character_report,
     entry_summary,
@@ -124,3 +126,16 @@ def test_index_matches_inflected_forms():
 def test_stem_alias_in_script_reports():
     report = character_report(["KACPR*"], [("p", "Rozdział", "prose", "Kacprowi było zimno.")])
     assert [a.label for a in report.appearances] == ["Kacprowi było zimno."]
+
+
+def test_factions_and_items_are_found_in_writing():
+    from screenwriter.bible import FACTION, ITEM, LABELS, report
+
+    assert list(LABELS) == [CHARACTER, LOCATION, FACTION, ITEM]
+    docs = [("p", "Session 3", "prose", "The Zhentarim want Dawnbringer.\nThe blade glows."), ("s", "Pilot", "screenplay", SCRIPT)]
+    zhents = report(FACTION, ["Zhentarim"], docs)
+    assert [(a.doc_id, a.line) for a in zhents.appearances] == [("p", 0)]
+    blade = report(ITEM, all_names(parse_entry(format_entry({"name": "Dawnbringer", "aliases": "the blade"}, ""))[0], ITEM), docs)
+    assert [a.line for a in blade.appearances] == [0, 1]
+    index = BibleIndex([("z", FACTION, format_entry({"name": "Zhentarim"}, "")), ("d", ITEM, format_entry({"name": "Dawnbringer"}, ""))])
+    assert sorted((e.kind, n) for e, n in index.cast(docs[0][3])) == [(FACTION, 1), (ITEM, 1)]

@@ -19,7 +19,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..bible import CHARACTER, FIELDS, Report, character_report, format_entry, location_report, parse_entry, script_names
+from ..bible import ALIAS_HINTS, CHARACTER, FIELDS, LABELS, LOCATION, Report, format_entry, parse_entry, script_names
+from ..bible import report as find_in_documents
 from ..fountain import OutlineItem
 from .common import word_count
 from .prose import ProseEditor
@@ -47,10 +48,7 @@ class BibleEditor(QWidget):
         for key, label in FIELDS[kind]:
             edit = QLineEdit()
             if key == "aliases":
-                edit.setPlaceholderText(
-                    "Other names, comma-separated: MARA, the keeper" if kind == CHARACTER
-                    else "Other names, comma-separated: LAMP ROOM, the tower"
-                )
+                edit.setPlaceholderText(ALIAS_HINTS[kind])
             edit.textEdited.connect(self._on_field_edited)
             self.inputs[key] = edit
             form.addRow(label, edit)
@@ -78,7 +76,7 @@ class BibleEditor(QWidget):
         side = QWidget()
         side_layout = QVBoxLayout(side)
         side_layout.setContentsMargins(8, 0, 0, 0)
-        title = QLabel("Appears in" if kind == CHARACTER else "Scenes set here")
+        title = QLabel({CHARACTER: "Appears in", LOCATION: "Scenes set here"}.get(kind, "Mentioned in"))
         title.setStyleSheet("font-weight: 600;")
         side_layout.addWidget(title)
         side_layout.addWidget(self.summary)
@@ -144,8 +142,7 @@ class BibleEditor(QWidget):
             self._on_changed()
 
     def stats(self) -> str:
-        label = "Character" if self.kind == CHARACTER else "Location"
-        return f"{label} · {word_count(self.notes.toPlainText())} words of notes"
+        return f"{LABELS[self.kind]} · {word_count(self.notes.toPlainText())} words of notes"
 
     def outline(self) -> list[OutlineItem]:
         return self.notes.outline()
@@ -202,10 +199,7 @@ class BibleEditor(QWidget):
         return script_names(self.fields(), self.kind)
 
     def report(self) -> Report:
-        docs = self.documents()
-        if self.kind == CHARACTER:
-            return character_report(self.names(), docs)
-        return location_report(self.names(), docs)
+        return find_in_documents(self.kind, self.names(), self.documents())
 
     def refresh_appearances(self) -> None:
         self.appearances.clear()
@@ -235,8 +229,11 @@ class BibleEditor(QWidget):
                 f"{report.speeches} speech{'es' if report.speeches != 1 else ''} · {report.words} words spoken · "
                 f"{scenes} scene{'s' if scenes != 1 else ''}\nLooking for: {looked_for}"
             )
-        else:
+        elif self.kind == LOCATION:
             self.summary.setText(f"{scenes} scene{'s' if scenes != 1 else ''}\nLooking for: {looked_for}")
+        else:
+            n = len(report.appearances)
+            self.summary.setText(f"{n} mention{'s' if n != 1 else ''}\nLooking for: {looked_for}")
 
     def _open_appearance(self, item: QTreeWidgetItem) -> None:
         doc_id, pos, length = item.data(0, APPEARANCE_ROLE)

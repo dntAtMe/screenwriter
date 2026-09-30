@@ -6,7 +6,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QTreeWidget, QTreeWidgetItem
 
-from .bible import CHARACTER, LOCATION, IndexEntry
+from .bible import PLURALS, IndexEntry
 
 ID_ROLE = Qt.ItemDataRole.UserRole
 
@@ -31,14 +31,14 @@ class CastPanel(QTreeWidget):
         self._last = key
         self.clear()
         if not cast:
-            hint = "No story bible names here yet." if has_bible else "Add characters and locations to the Story Bible to see them here."
+            hint = "No story bible names here yet." if has_bible else "Add characters, places and more to the Story Bible to see them here."
             item = QTreeWidgetItem([hint])
             item.setFlags(Qt.ItemFlag.NoItemFlags)
             self.addTopLevelItem(item)
             return
         bold = QFont(self.font())
         bold.setBold(True)
-        for kind, label in ((CHARACTER, "Characters"), (LOCATION, "Locations")):
+        for kind, label in PLURALS.items():
             entries = [(e, n) for e, n in cast if e.kind == kind]
             if not entries:
                 continue

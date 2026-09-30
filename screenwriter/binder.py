@@ -14,7 +14,8 @@ from PySide6.QtWidgets import (
 
 from .editors.board import NODE_MIME
 from . import icons
-from .project import BOARD, CHARACTER, DOCUMENT_KINDS, LOCATION, FOLDER, NOTE, PROSE, SCREENPLAY, TRASH, Node, Project, walk
+from .bible import COLORS as BIBLE_COLORS, LABELS as BIBLE_LABELS
+from .project import BIBLE_KINDS, BOARD, DOCUMENT_KINDS, FOLDER, NOTE, PROSE, SCREENPLAY, TRASH, Node, Project, walk
 
 ID_ROLE = Qt.ItemDataRole.UserRole
 KIND_ROLE = Qt.ItemDataRole.UserRole + 1
@@ -23,7 +24,7 @@ LABEL_ROLE = Qt.ItemDataRole.UserRole + 3
 
 KIND_LABELS = {
     PROSE: "Prose Document", SCREENPLAY: "Screenplay", NOTE: "Note", BOARD: "Board",
-    CHARACTER: "Character", LOCATION: "Location", FOLDER: "Folder",
+    **BIBLE_LABELS, FOLDER: "Folder",
 }
 class PresenceDelegate(QStyledItemDelegate):
     """Draws a coloured initial at the right of documents other people have open."""
@@ -62,7 +63,7 @@ class PresenceDelegate(QStyledItemDelegate):
         painter.restore()
 
 
-DEFAULT_TITLES = {PROSE: "Untitled Chapter", SCREENPLAY: "Untitled Screenplay", NOTE: "Untitled Note", BOARD: "Untitled Board", CHARACTER: "New Character", LOCATION: "New Location", FOLDER: "New Folder"}
+DEFAULT_TITLES = {PROSE: "Untitled Chapter", SCREENPLAY: "Untitled Screenplay", NOTE: "Untitled Note", BOARD: "Untitled Board", **{k: f"New {label}" for k, label in BIBLE_LABELS.items()}, FOLDER: "New Folder"}
 
 
 KIND_COLORS = {  # each kind of document has its own colour; folders and the Trash follow the theme
@@ -70,8 +71,7 @@ KIND_COLORS = {  # each kind of document has its own colour; folders and the Tra
     SCREENPLAY: "#c0563c",
     NOTE: "#5f9150",
     BOARD: "#8a63b8",
-    CHARACTER: "#c07a2c",
-    LOCATION: "#2f8a86",
+    **BIBLE_COLORS,
 }
 
 
@@ -390,7 +390,7 @@ class Binder(QTreeWidget):
         if item:
             self.setCurrentItem(item)
         menu = QMenu(self)
-        for kind in (PROSE, SCREENPLAY, NOTE, BOARD, CHARACTER, LOCATION, FOLDER):
+        for kind in (PROSE, SCREENPLAY, NOTE, BOARD, *BIBLE_KINDS, FOLDER):
             action = QAction(self.icons[kind], f"New {KIND_LABELS[kind]}", menu)
             action.triggered.connect(lambda _=False, k=kind: self.add(k))
             menu.addAction(action)

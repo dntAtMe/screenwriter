@@ -66,7 +66,7 @@ from .editors.prose import ProseEditor
 from .editors.screenplay import ScreenplayEditor
 from .editors import screenplay
 from .fountain import EL_NAMES
-from .project import BIBLE_KINDS, BOARD, CHARACTER, DOCUMENT_KINDS, LOCATION, FOLDER, NOTE, PROSE, SCREENPLAY, TRASH, Project, walk
+from .project import BIBLE_KINDS, BOARD, CHARACTER, DOCUMENT_KINDS, FACTION, ITEM, LOCATION, FOLDER, NOTE, PROSE, SCREENPLAY, TRASH, Project, walk
 
 APP_NAME = "Screenwriter"
 MAX_RECENT = 8
@@ -463,7 +463,7 @@ class MainWindow(QMainWindow):
         menu = QMenu(self)
         for kind, label in ((PROSE, "Chapter / Prose Document"), (SCREENPLAY, "Screenplay"), (NOTE, "Note"),
                             (BOARD, "Board (mind map)"), (CHARACTER, "Character"), (LOCATION, "Location"),
-                            (FOLDER, "Folder")):
+                            (FACTION, "Faction"), (ITEM, "Item"), (FOLDER, "Folder")):
             action = menu.addAction(label, lambda k=kind: self.project and self.binder.add(k))
             action.setData(kind)
         menu.addSeparator()
@@ -609,6 +609,8 @@ class MainWindow(QMainWindow):
             (BOARD, "New Board", "Ctrl+Alt+B"),
             (CHARACTER, "New Character", "Ctrl+Alt+C"),
             (LOCATION, "New Location", "Ctrl+Alt+L"),
+            (FACTION, "New Faction", "Ctrl+Alt+F"),
+            (ITEM, "New Item", "Ctrl+Alt+I"),
             (FOLDER, "New Folder", "Ctrl+Shift+G"),
         ):
             self.project_actions.append(self._action(insert, label, lambda _=False, k=kind: self.binder.add(k), shortcut))

@@ -26,7 +26,7 @@ def underline_misspelled(highlighter, text: str, spell) -> None:
                 highlighter.setFormat(i, 1, f)
 
 
-BIBLE_COLORS = {"character": "#c07a2c", "location": "#2f8a86"}  # match the binder icons
+from ..bible import COLORS as BIBLE_COLORS  # match the binder icons
 
 
 def tint(highlighter, start: int, end: int, kind: str, strong: bool = False) -> None:
