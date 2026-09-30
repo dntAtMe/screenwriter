@@ -168,6 +168,7 @@ class FormatBar(QToolBar):
         self.editor: ScreenplayEditor | ProseEditor | None = None
         self.script_only: list[QAction] = []
         self.prose_only: list[QAction] = []
+        self._shown_once = False
 
         # Screenplay elements, showing which one the cursor's line is.
         self.elements = QActionGroup(self)
@@ -225,13 +226,18 @@ class FormatBar(QToolBar):
         return action
 
     def set_editor(self, editor) -> None:
-        """The editor the buttons act on: a ScreenplayEditor, a ProseEditor, or None."""
+        """The editor the buttons act on: a ScreenplayEditor, a ProseEditor, or None (a board or
+        corkboard). With None the bar stays as it was, greyed out, so the tabs below don't move."""
         self.editor = editor
-        is_script = isinstance(editor, ScreenplayEditor)
-        for action in self.script_only:
-            action.setVisible(is_script)
-        for action in self.prose_only:
-            action.setVisible(isinstance(editor, ProseEditor))
+        for action in self.actions():
+            action.setEnabled(editor is not None)
+        if editor is not None or not self._shown_once:
+            is_script = isinstance(editor, ScreenplayEditor)
+            for action in self.script_only:
+                action.setVisible(is_script)
+            for action in self.prose_only:
+                action.setVisible(not is_script)  # (prose buttons until a script is open)
+            self._shown_once = editor is not None
         self.sync_element()
 
     def sync_element(self) -> None:

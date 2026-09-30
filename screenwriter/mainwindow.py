@@ -2198,14 +2198,15 @@ class MainWindow(QMainWindow):
             self.format_bar.sync_element()
 
     def _update_format_bar(self) -> None:
-        """Point the formatting toolbar at the current tab; hide it where there's nothing to format."""
+        """Point the formatting toolbar at the current tab; greyed out where there's nothing to
+        format (a board), but never hidden while a document is open, so the tabs don't jump."""
         editor = self.tabs.currentWidget()
         if isinstance(editor, BibleEditor):
             editor = editor.notes
         target = editor if isinstance(editor, (ScreenplayEditor, ProseEditor)) else None
         self.format_bar.set_editor(target)
         focused = self.tabs.tab_bars_hidden()
-        self.format_bar.setVisible(target is not None and self.toolbar_action.isChecked() and not focused)
+        self.format_bar.setVisible(self.tabs.count() > 0 and self.toolbar_action.isChecked() and not focused)
 
     def _toggle_live(self) -> None:
         self.settings.setValue("live_editing", self.live_action.isChecked())

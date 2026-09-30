@@ -158,3 +158,30 @@ def test_centered_section_synopsis(script):
     assert ed.text() == "# the end\n"
     press(bar, "Synopsis")
     assert ed.text() == "= the end\n"
+
+
+def test_bar_stays_put_on_a_board(qapp, sample_project):
+    """Switching to a board greys the buttons out instead of hiding the bar, so the tabs don't jump."""
+    from PySide6.QtCore import QSettings
+
+    from conftest import dispose
+    from screenwriter.mainwindow import MainWindow
+
+    QSettings().clear()
+    w = MainWindow()
+    w.resize(1100, 700)
+    w.show()
+    w.open_project(sample_project)
+    w.open_document("ch01")
+    qapp.processEvents()
+    tabs_y = w.tabs.mapTo(w, w.tabs.rect().topLeft()).y()
+    shown = [a.text() for a in w.format_bar.actions() if a.isVisible() and a.text()]
+    w.open_document("storymap")  # a board
+    qapp.processEvents()
+    assert w.format_bar.isVisible()
+    assert [a.text() for a in w.format_bar.actions() if a.isVisible() and a.text()] == shown
+    assert not any(a.isEnabled() for a in w.format_bar.actions() if a.text())
+    assert w.tabs.mapTo(w, w.tabs.rect().topLeft()).y() == tabs_y
+    w.open_document("ch01")
+    assert all(a.isEnabled() for a in w.format_bar.actions() if a.isVisible() and a.text())
+    dispose(w)
