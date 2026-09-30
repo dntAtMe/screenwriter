@@ -49,6 +49,7 @@ from .commentspanel import CommentsPanel
 from . import spelling
 from .updates import UpdatesPanel, arrived, recent_updates
 from .quickopen import DoubleShift, QuickOpen, Target
+from .commands import CommandPalette
 from .shortcuthints import ShortcutHints
 from .historydialog import HistoryDialog
 from .projecthistory import ProjectHistory
@@ -645,6 +646,7 @@ class MainWindow(QMainWindow):
         ]
         view.addSeparator()
         self.project_actions.append(self._action(view, "Go to Document…", self.quick_open, "Ctrl+P"))
+        self.palette_action = self._action(view, "Command Palette…", self.command_palette, "Ctrl+Shift+P")
         next_tab = self._action(view, "Next Tab", lambda: self.tabs.next_tab(1))
         next_tab.setShortcuts([QKeySequence("Ctrl+Tab"), QKeySequence("Ctrl+PgDown")])
         prev_tab = self._action(view, "Previous Tab", lambda: self.tabs.next_tab(-1))
@@ -2266,6 +2268,12 @@ class MainWindow(QMainWindow):
         dialog = QuickOpen(self._quick_open_targets(), self.binder.icons, self)
         if dialog.exec() and dialog.chosen:
             self.go_to(dialog.chosen, beside=dialog.beside)
+
+    def command_palette(self) -> None:
+        """Ctrl+Shift+P: run any menu command by typing part of its name."""
+        dialog = CommandPalette(self.menuBar(), self, exclude=(self.palette_action,))
+        if dialog.exec() and dialog.action is not None:
+            dialog.action.trigger()
 
     def go_to(self, target: Target, beside: bool = False) -> None:
         self.open_document(target.node_id)
