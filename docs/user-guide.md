@@ -14,6 +14,7 @@ On macOS, `Ctrl` in every shortcut below means `⌘` (Command), and `Alt` means 
 - [Sync, backup and sharing](#sync-backup-and-sharing)
 - [Exporting](#exporting)
 - [Views and focus](#views-and-focus)
+- [New versions](#new-versions)
 - [Keyboard shortcuts](#keyboard-shortcuts)
 - [How projects are stored](#how-projects-are-stored)
 
@@ -438,6 +439,17 @@ Select what to export in the binder and choose **File → Export…** (`Ctrl+E`)
   standard page layout (10 characters per inch), so only fonts whose letters are all one width are offered for it.
   **Smooth letters** (on by default) draws softer, less pixel-sharp text; on Windows, restart after changing it.
 - Hide the binder with `Ctrl+\` and the side panel with `Ctrl+Alt+\`.
+
+## New versions
+
+Screenwriter checks once a day, when it starts, whether a newer version has been released. If there is one,
+an **Update to …** button appears at the top of the window (and a line on the start screen): click it to see
+what's new, then **Download…** to open the release page, and install the new version over this one — your
+projects and settings stay as they are. **Skip This Version** stops the reminders until the next one comes out.
+
+**Help → Check for Updates…** checks straight away. To stop the automatic check, untick
+**Help → Check for Updates Automatically**. The check only asks GitHub for the latest release; nothing about
+you or your projects is sent.
 
 ## Keyboard shortcuts
 

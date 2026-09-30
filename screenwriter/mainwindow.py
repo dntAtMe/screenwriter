@@ -1,5 +1,6 @@
 import html
 import json
+import time
 import sys
 from datetime import datetime
 import re
@@ -50,7 +51,7 @@ from . import spelling
 from .updates import UpdatesPanel, arrived, recent_updates
 from .quickopen import DoubleShift, QuickOpen, Target
 from .commands import CommandPalette
-from . import bookmarks
+from . import bookmarks, newversion
 from .shortcuthints import ShortcutHints
 from .historydialog import HistoryDialog
 from .projecthistory import ProjectHistory
@@ -188,6 +189,11 @@ class Welcome(QWidget):
         title.setObjectName("WelcomeTitle")
         subtitle = QLabel("Screenplays, books, notes and ideas — in one calm place.")
         subtitle.setObjectName("WelcomeSubtitle")
+        self.new_version = QLabel()  # "Screenwriter 1.1 is available", when it is
+        self.new_version.setObjectName("NewVersion")
+        self.new_version.setTextFormat(Qt.TextFormat.RichText)
+        self.new_version.linkActivated.connect(lambda _link: window.show_new_version())
+        self.new_version.hide()
         self.buttons = [
             ("plus", "New Project", "Start a screenplay, a novel, or both", window.new_project),
             ("open", "Open Project…", "A project folder on this computer", window.open_project_dialog),
@@ -200,6 +206,7 @@ class Welcome(QWidget):
         column.addSpacing(6)
         column.addWidget(title)
         column.addWidget(subtitle)
+        column.addWidget(self.new_version)
         column.addSpacing(22)
         for icon_name, text, detail, slot in self.buttons:
             column.addWidget(BigButton(icon_name, text, detail, slot))
@@ -290,6 +297,10 @@ class MainWindow(QMainWindow):
         self.tabs = TabArea()  # one tab pane, or two when the view is split
         self.tab_history: list[str] = []  # node ids, most recently viewed first
         self.bookmarks: list[bookmarks.Bookmark] = []  # the project's, as last saved (see bookmarks.py)
+        self.new_release: newversion.Release | None = None  # a newer version on GitHub, once checked
+        self._manual_check = False
+        self.version_checker = newversion.Checker(self)
+        self.version_checker.finished.connect(self._on_version_checked)
         self.tabs.tabCloseRequested.connect(self.close_tab)
         self.tabs.currentChanged.connect(self._on_tab_changed)
 
@@ -565,6 +576,12 @@ class MainWindow(QMainWindow):
         spacer = QWidget()
         spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         bar.addWidget(spacer)
+        self.update_button = button("download", "Update", "A new version of Screenwriter is available",
+                                    lambda: self.show_new_version())
+        self.update_button.setObjectName("UpdatePill")
+        self.update_button.hide()
+        self.update_action = bar.actions()[-1]  # (a toolbar hides the action, not the button)
+        self.update_action.setVisible(False)
         button("plus", "New", "Add a chapter, screenplay, note, board, character…", menu=self._new_menu())
         button("search", "Find", "Go to any document, scene or card (press Shift twice)", self.quick_open)
         button("history", "History", "Earlier versions of the project (Ctrl+Alt+H)", lambda: self.show_history())
@@ -751,6 +768,11 @@ class MainWindow(QMainWindow):
         help_menu.addSeparator()
         self._action(help_menu, "User Guide", lambda: QDesktopServices.openUrl(QUrl(f"{REPOSITORY}/blob/main/docs/user-guide.md")))
         self._action(help_menu, "Report a Problem…", lambda: QDesktopServices.openUrl(QUrl(f"{REPOSITORY}/issues")))
+        help_menu.addSeparator()
+        self._action(help_menu, "Check for Updates…", lambda: self.check_for_updates(manual=True))
+        self.auto_update_action = self._action(help_menu, "Check for Updates Automatically", self._toggle_auto_update)
+        self.auto_update_action.setCheckable(True)
+        self.auto_update_action.setChecked(self.settings.value("updates/auto", True, type=bool))
         about = self._action(help_menu, f"About {APP_NAME}", self.show_about)
         about.setMenuRole(QAction.MenuRole.AboutRole)  # lands in the app menu on macOS
 
@@ -2566,6 +2588,83 @@ class MainWindow(QMainWindow):
 
     def show_screenplay_help(self) -> None:
         QMessageBox.information(self, "Screenplay Keys", screenplay.__doc__.split("Keys:", 1)[1].strip("\n"))
+
+    # --- new versions -----------------------------------------------------------------
+
+    def check_for_updates(self, manual: bool = False) -> None:
+        """Ask GitHub whether there's a newer release. Automatic checks (at start) happen at most
+        once a day and only if turned on; Help → Check for Updates… always asks, and always answers."""
+        if not manual:
+            last = float(self.settings.value("updates/last_check", 0) or 0)
+            if not self.auto_update_action.isChecked() or not newversion.due(last):
+                return
+        self.settings.setValue("updates/last_check", time.time())
+        self._manual_check = manual or getattr(self, "_manual_check", False)
+        if manual:
+            self.statusBar().showMessage("Checking for a new version…", 5000)
+        self.version_checker.start()
+
+    def _on_version_checked(self, release, error: str) -> None:
+        self.version_checker.busy = False
+        manual, self._manual_check = getattr(self, "_manual_check", False), False
+        if error:
+            if manual:
+                QMessageBox.information(self, "Check for Updates",
+                                        f"Couldn't reach GitHub to check for a new version.\n\n{error}")
+            return
+        if release is None or not newversion.is_newer(release.version):
+            self.new_release = None
+            self._show_new_version_notice()
+            if manual:
+                QMessageBox.information(self, "Check for Updates",
+                                        f"You have the latest version, {APP_NAME} {__version__}.")
+            return
+        self.new_release = release
+        skipped = self.settings.value("updates/skipped", "")
+        if manual or skipped != release.version:
+            self._show_new_version_notice()
+        if manual:
+            self.show_new_version()
+
+    def _show_new_version_notice(self) -> None:
+        """The Update button in the header, and a line on the start screen."""
+        release = getattr(self, "new_release", None)
+        self.update_action.setVisible(release is not None)
+        self.update_button.setVisible(release is not None)
+        if release is not None:
+            self.update_button.setText(f"Update to {release.version}")
+            self.welcome.new_version.setText(
+                f"{APP_NAME} {html.escape(release.version)} is available — <a href='#'>see what's new</a>")
+        self.welcome.new_version.setVisible(release is not None)
+
+    def show_new_version(self) -> None:
+        """What's new in the latest release, with a way to download it (or skip this one)."""
+        release = getattr(self, "new_release", None)
+        if release is None:
+            return
+        box = QMessageBox(self)
+        box.setWindowTitle("New Version")
+        box.setIcon(QMessageBox.Icon.Information)
+        box.setText(f"<b>{APP_NAME} {html.escape(release.version)} is available.</b> You have {__version__}.")
+        box.setInformativeText("Download it from the release page and install it over this one — "
+                               "your projects and settings stay as they are.")
+        if release.notes:
+            box.setDetailedText(release.notes)
+        download = box.addButton("Download…", QMessageBox.ButtonRole.AcceptRole)
+        skip = box.addButton("Skip This Version", QMessageBox.ButtonRole.DestructiveRole)
+        box.addButton("Later", QMessageBox.ButtonRole.RejectRole)
+        box.setDefaultButton(download)
+        box.exec()
+        if box.clickedButton() is download:
+            QDesktopServices.openUrl(QUrl(release.url or f"{REPOSITORY}/releases/latest"))
+        elif box.clickedButton() is skip:
+            self.settings.setValue("updates/skipped", release.version)  # no reminders until a newer one
+            self.update_action.setVisible(False)
+            self.update_button.hide()
+            self.welcome.new_version.hide()
+
+    def _toggle_auto_update(self) -> None:
+        self.settings.setValue("updates/auto", self.auto_update_action.isChecked())
 
     def show_about(self) -> None:
         from PySide6 import __version__ as pyside_version

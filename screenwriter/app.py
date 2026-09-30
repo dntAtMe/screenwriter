@@ -52,6 +52,9 @@ def main() -> None:
     elif (last := QSettings().value("last_project")) and Project.is_project(Path(last)):
         window.open_project(Path(last))
 
+    if not os.environ.get("SCREENWRITER_SMOKE_TEST"):
+        QTimer.singleShot(4000, window.check_for_updates)  # a new version? (at most once a day; Help menu)
+
     if os.environ.get("SCREENWRITER_SMOKE_TEST"):
         # CI: prove the packaged app starts (and can open a project), then quit.
         def report():

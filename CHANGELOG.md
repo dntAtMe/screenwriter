@@ -6,6 +6,12 @@ All notable changes to Screenwriter are listed here. The format follows
 
 ## [Unreleased]
 
+### Added
+- **New version notice.** Once a day Screenwriter checks for a newer release and, if there is one, shows an
+  **Update to …** button in the header (and a line on the start screen) with what's new and a download link;
+  a version can be skipped. **Help ▸ Check for Updates…** checks straight away, and the automatic check can be
+  turned off. Only GitHub's public release list is fetched.
+
 ## [1.0.0] - 2026-10-01
 
 Screenwriter 1.0: a new look throughout, and a round of everyday comforts — switch projects from the header,

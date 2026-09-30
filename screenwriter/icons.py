@@ -104,6 +104,13 @@ def _location(p: QPainter) -> None:  # a map pin
     p.drawEllipse(QPointF(12, 9.5), 2.6, 2.6)
 
 
+@drawing("download")
+def _download(p: QPainter) -> None:  # an arrow down into a tray
+    p.drawLine(QPointF(12, 3.5), QPointF(12, 15))
+    p.drawPath(_path((7, 10), (12, 15), (17, 10)))
+    p.drawPath(_path((4, 15.5), (4, 20), (20, 20), (20, 15.5)))
+
+
 @drawing("folder")
 def _folder(p: QPainter) -> None:
     p.drawPath(_path((3, 6.5), (3, 19), (21, 19), (21, 8.5), (12.5, 8.5), (10.5, 5.5), (4, 5.5), (3, 6.5), close=True))

@@ -254,6 +254,8 @@ QTextBrowser { background: @base; border: 1px solid @border; border-radius: 8px;
 QWidget#Welcome, QWidget#EmptyState { background: @window; }
 QLabel#WelcomeTitle { font-size: 30px; font-weight: 700; color: @text; }
 QLabel#WelcomeSubtitle, QLabel#EmptyText { color: @muted; font-size: 14px; }
+QLabel#NewVersion { color: @accent; font-size: 13px; padding-top: 6px; }
+QToolBar#HeaderBar QToolButton#UpdatePill { color: @accent; border: 1px solid @accent; border-radius: 12px; padding: 3px 10px; }
 QLabel#SectionLabel { color: @muted; font-size: 11px; font-weight: 600; }
 QPushButton#BigButton { text-align: left; padding: 0; border-radius: 10px; min-height: 52px; }
 QLabel#BigButtonTitle { font-size: 14px; font-weight: 600; color: @text; }
