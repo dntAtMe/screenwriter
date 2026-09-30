@@ -23,6 +23,10 @@ A **project** is one folder holding everything for a story: chapters, scripts, n
 Story Bible. Create one with **File → New Project…** (`Ctrl+Shift+N`) or open an existing folder with
 **File → Open Project…** (`Ctrl+O`). Screenwriter reopens your last project and its tabs on start.
 
+**Switching projects.** Click the project's name at the top left (or press `Ctrl+Alt+O`) for your ten most
+recently opened projects, or use **File → Open Recent**. The one you're in is greyed out; pick another and
+Screenwriter saves your work and switches, reopening that project's tabs.
+
 The **binder** on the left lists the project's contents. Each item is one of:
 
 | Icon | Item | Used for |
@@ -428,6 +432,7 @@ press the key you want, or let go, and it disappears. With `Alt` it also shows t
 |---|---|
 | **Projects** | |
 | New project / Open project | `Ctrl+Shift+N` / `Ctrl+O` |
+| Switch to a recent project | `Ctrl+Alt+O` |
 | Save now / Close tab | `Ctrl+S` / `Ctrl+W` |
 | Export | `Ctrl+E` |
 | Save version / History | `Ctrl+Alt+S` / `Ctrl+Alt+H` |

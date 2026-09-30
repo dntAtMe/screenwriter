@@ -69,7 +69,7 @@ from .fountain import EL_NAMES
 from .project import BIBLE_KINDS, BOARD, CHARACTER, DOCUMENT_KINDS, LOCATION, FOLDER, NOTE, PROSE, SCREENPLAY, TRASH, Project, walk
 
 APP_NAME = "Screenwriter"
-MAX_RECENT = 8
+MAX_RECENT = 10
 
 
 class SideTabs(QTabWidget):
@@ -500,9 +500,17 @@ class MainWindow(QMainWindow):
             return b
 
         self.binder_toggle = button("sidebar-left", "", "Show or hide the binder (Ctrl+\\)", self.toggle_binder, label=False)
-        self.project_title = QLabel()
+        self.project_title = QToolButton()  # the project's name; click to switch to a recent one
         self.project_title.setObjectName("ProjectTitle")
+        self.project_title.setToolTip("Switch to a recent project (Ctrl+Alt+O)")
+        self.project_title.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.project_title.setLayoutDirection(Qt.LayoutDirection.RightToLeft)  # the chevron after the name
+        self.project_title.setIconSize(QSize(12, 12))
+        self.project_title.setIcon(icons.icon("chevron-down"))
+        self.project_title.setMenu(self._recent_menu(QMenu(self)))
+        self.project_title.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         bar.addWidget(self.project_title)
+        self._header_buttons.append((self.project_title, "chevron-down"))
         self.project_status = QLabel()
         self.project_status.setObjectName("ProjectStatus")
         bar.addWidget(self.project_status)
@@ -558,6 +566,8 @@ class MainWindow(QMainWindow):
         file = bar.addMenu("&File")
         self._action(file, "New Project…", self.new_project, "Ctrl+Shift+N")
         self._action(file, "Open Project…", self.open_project_dialog, "Ctrl+O")
+        self.recent_menu = self._recent_menu(file.addMenu("Open Recent"))
+        self._action(file, "Switch Project…", self.switch_project, "Ctrl+Alt+O")
         self._action(file, "Open Project File…", self.open_project_file)
         self._action(file, "Open from Google Drive…", self.open_from_google_drive)
         self._action(file, "Your Name…", self.set_your_name)
@@ -805,7 +815,52 @@ class MainWindow(QMainWindow):
         self.close_project()
 
     def _recent(self) -> list[str]:
-        return [p for p in (self.settings.value("recent", []) or []) if Project.is_project(Path(p))]
+        saved = self.settings.value("recent", []) or []
+        if isinstance(saved, str):  # a one-item list comes back as a string on some systems
+            saved = [saved]
+        return [p for p in saved if Project.is_project(Path(p))]
+
+    def _recent_menu(self, menu: QMenu) -> QMenu:
+        """A menu of recently opened projects, filled each time it opens."""
+        menu.aboutToShow.connect(lambda m=menu: self._fill_recent_menu(m))
+        return menu
+
+    def _fill_recent_menu(self, menu: QMenu) -> None:
+        menu.clear()
+        current = str(self.project.path) if self.project else None
+        recent = self._recent()
+        for i, path in enumerate(recent):
+            name = Path(path).name
+            label = f"&{(i + 1) % 10}  {name}" if i < 10 else name
+            action = menu.addAction(icons.icon("folder"), label, lambda p=path: self.open_project(Path(p)))
+            action.setToolTip(path)
+            action.setStatusTip(short_path(path))
+            if path == current:
+                action.setCheckable(True)
+                action.setChecked(True)
+                action.setEnabled(False)
+        if not recent:
+            menu.addAction("No recent projects").setEnabled(False)
+        menu.addSeparator()
+        menu.addAction(icons.icon("open"), "Open Project…", self.open_project_dialog)
+        if len(recent) > (1 if current else 0):
+            menu.addAction("Clear Recent Projects", self.clear_recent)
+        menu.setToolTipsVisible(True)
+
+    def switch_project(self) -> None:
+        """Ctrl+Alt+O: the recent projects, under the project's name (or the File menu's list on the start screen)."""
+        menu = self.project_title.menu()
+        if self.project is not None and self.project_title.isVisible():
+            self.project_title.showMenu()
+        else:
+            self._fill_recent_menu(menu)
+            menu.exec(self.mapToGlobal(self.rect().center()) - menu.sizeHint().center())
+
+    def clear_recent(self) -> None:
+        """Forget every recent project but the open one."""
+        keep = [str(self.project.path)] if self.project else []
+        self.settings.setValue("recent", keep)
+        self.welcome.set_recent(self._recent())
 
     def _remember(self, path: Path) -> None:
         recent = [str(path)] + [p for p in self._recent() if p != str(path)]

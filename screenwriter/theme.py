@@ -145,7 +145,7 @@ QToolBar#HeaderBar QToolButton { color: @text; border-radius: 7px; padding: 5px 
 QToolBar#HeaderBar QToolButton:hover { background: @hover; }
 QToolBar#HeaderBar QToolButton:pressed, QToolBar#HeaderBar QToolButton:checked { background: @pressed; }
 QToolBar#HeaderBar QToolButton::menu-indicator { image: none; width: 0; }
-QLabel#ProjectTitle { font-size: 14px; font-weight: 600; color: @text; padding-left: 4px; }
+QToolBar#HeaderBar QToolButton#ProjectTitle { font-size: 14px; font-weight: 600; color: @text; padding: 4px 6px; }
 QLabel#ProjectStatus { color: @muted; padding-left: 8px; }
 QToolButton#SyncPill { border: 1px solid @border_strong; border-radius: 12px; padding: 3px 10px; color: @muted; }
 

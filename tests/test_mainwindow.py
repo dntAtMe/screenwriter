@@ -627,3 +627,39 @@ def test_joining_keeps_what_you_wrote_before(window, tmp_path, monkeypatch):
     assert a.text() == b.text()
     assert a.text().count("Before Anna.") == 1 and a.text().count("Before Ben.") == 1
     dispose(ben)
+
+
+def test_open_recent_lists_projects_and_switches(qapp, tmp_path):
+    from PySide6.QtCore import QSettings
+
+    from screenwriter.mainwindow import MAX_RECENT, MainWindow
+    from screenwriter.project import Project
+
+    QSettings().clear()
+    paths = [tmp_path / f"P{i}" for i in range(MAX_RECENT + 2)]
+    for p in paths:
+        Project.create(p, p.name)
+    w = MainWindow()
+    for p in paths:
+        w.open_project(p)
+    w._fill_recent_menu(w.recent_menu)
+    names = [a.text() for a in w.recent_menu.actions() if a.text() and not a.isSeparator()]
+    assert len([n for n in names if n.startswith("&")]) == MAX_RECENT
+    assert names[0] == f"&1  P{MAX_RECENT + 1}" and names[1] == f"&2  P{MAX_RECENT}"
+    current = w.recent_menu.actions()[0]
+    assert current.isChecked() and not current.isEnabled()  # the open project
+
+    w.recent_menu.actions()[1].trigger()  # switch to the previous one
+    assert w.project.name == f"P{MAX_RECENT}"
+    assert w.project_title.text() == f"P{MAX_RECENT}"
+    assert w._recent()[:2] == [str(paths[-2]), str(paths[-1])]
+
+    w.clear_recent()
+    assert w._recent() == [str(paths[-2])]
+    w._fill_recent_menu(w.project_title.menu())
+    assert "Clear Recent Projects" not in [a.text() for a in w.project_title.menu().actions()]
+
+    QSettings().setValue("recent", str(paths[0]))  # a single saved path comes back as a string
+    assert w._recent() == [str(paths[0])]
+    QSettings().clear()
+    dispose(w)
