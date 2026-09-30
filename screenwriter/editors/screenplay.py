@@ -357,6 +357,22 @@ class ScreenplayEditor(TextDocumentAPI, QTextEdit):
         self._apply_layout()
         self._recenter()
 
+    def set_scroll_room(self, px: int) -> None:
+        """Blank space after the last line (typewriter scrolling). A layout change, not an edit:
+        it stays out of undo and doesn't count as a change to the script."""
+        root = self.document().rootFrame()
+        fmt = root.frameFormat()
+        if fmt.bottomMargin() == px:
+            return
+        fmt.setBottomMargin(px)
+        self._applying = True
+        self.blockSignals(True)
+        try:
+            root.setFrameFormat(fmt)
+        finally:
+            self.blockSignals(False)
+            self._applying = False
+
     def _recenter(self) -> None:
         center_column(self, PAGE_CHARS * self._char_width() + 2 * self.document().documentMargin())
 

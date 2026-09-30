@@ -66,6 +66,7 @@ from .search import FindBar, SearchPanel
 from .editors.prose import ProseEditor
 from .editors.screenplay import ScreenplayEditor
 from .editors import screenplay
+from .editors.common import Typewriter
 from .fountain import EL_NAMES
 from .project import BIBLE_KINDS, BOARD, CHARACTER, DOCUMENT_KINDS, LOCATION, FOLDER, NOTE, PROSE, SCREENPLAY, TRASH, Project, walk
 
@@ -671,6 +672,9 @@ class MainWindow(QMainWindow):
         self.hints_action = self._action(view, "Shortcut Hints (hold Ctrl or Alt)", self._toggle_shortcut_hints)
         self.hints_action.setCheckable(True)
         self.hints_action.setChecked(self.settings.value("shortcut_hints", True, type=bool))
+        self.typewriter_action = self._action(view, "Typewriter Scrolling", self._toggle_typewriter, "Ctrl+Alt+T")
+        self.typewriter_action.setCheckable(True)
+        self.typewriter_action.setChecked(self.settings.value("typewriter", False, type=bool))
         self._action(view, "Full Screen", self.toggle_fullscreen, "Ctrl+Meta+F")
         self._action(view, "Fonts…", self.choose_fonts)
         appearance = view.addMenu("Appearance")
@@ -942,6 +946,9 @@ class MainWindow(QMainWindow):
         self.tabs.setCurrentIndex(index)
         editor.setFocus()
         self._restore_position(editor)
+        if (box := self._text_widget(editor)) is not None:
+            box.typewriter = Typewriter(box)
+            box.typewriter.set_enabled(self.typewriter_action.isChecked())
 
     def _editing(self) -> None:
         if self.save_timer.isActive():
@@ -1942,6 +1949,14 @@ class MainWindow(QMainWindow):
                 box.verticalScrollBar().setValue(int(saved[1]))
 
         QTimer.singleShot(0, scroll)
+
+    def _toggle_typewriter(self) -> None:
+        on = self.typewriter_action.isChecked()
+        self.settings.setValue("typewriter", on)
+        for editor in self.editors.values():
+            if (box := self._text_widget(editor)) is not None and hasattr(box, "typewriter"):
+                box.typewriter.set_enabled(on)
+        self.statusBar().showMessage("Typewriter scrolling " + ("on: the line you type stays in the middle" if on else "off"), 3000)
 
     def _mark_unsaved(self, editor) -> None:
         if not getattr(editor, "unsaved", False):

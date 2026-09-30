@@ -1,8 +1,8 @@
 import re
 
-from PySide6.QtCore import QEvent, QObject
+from PySide6.QtCore import QEvent, QObject, QTimer
 from PySide6.QtGui import QFontDatabase, QPalette, QTextCursor
-from PySide6.QtWidgets import QAbstractScrollArea
+from PySide6.QtWidgets import QAbstractScrollArea, QPlainTextEdit
 
 from ..marks import strip_marks
 from ..spelling import words_to_check
@@ -165,6 +165,52 @@ def paint_margins_as_page(editor: QAbstractScrollArea) -> None:
     editor.setPalette(pal)
     editor.setAutoFillBackground(True)
     editor.installEventFilter(_PageMargins(editor))
+
+
+class Typewriter(QObject):
+    """Typewriter scrolling: as you type, the line you're on stays in the middle of the
+    editor instead of creeping to the bottom edge. Clicking elsewhere doesn't scroll;
+    the next key you press brings that line to the middle."""
+
+    def __init__(self, editor):
+        super().__init__(editor)
+        self.editor = editor
+        self.enabled = False
+        self._before: tuple[int, int] | None = None
+        editor.installEventFilter(self)
+
+    def set_enabled(self, on: bool) -> None:
+        self.enabled = on
+        self._make_room()
+        if on:
+            QTimer.singleShot(0, self.center)
+
+    def _make_room(self) -> None:
+        """Space below the last line, so even it can sit in the middle."""
+        if isinstance(self.editor, QPlainTextEdit):
+            self.editor.setCenterOnScroll(self.enabled)
+        else:
+            self.editor.set_scroll_room(self.editor.viewport().height() // 2 if self.enabled else 0)
+
+    def _state(self) -> tuple[int, int]:
+        return self.editor.textCursor().position(), self.editor.document().revision()
+
+    def eventFilter(self, obj, e):
+        if self.enabled:
+            if e.type() == QEvent.Type.KeyPress:
+                before = self._state()
+                QTimer.singleShot(0, lambda: self._state() != before and self.center())
+            elif e.type() == QEvent.Type.Resize and not isinstance(self.editor, QPlainTextEdit):
+                QTimer.singleShot(0, self._make_room)
+        return False
+
+    def center(self) -> None:
+        editor = self.editor
+        if isinstance(editor, QPlainTextEdit):
+            editor.centerCursor()
+            return
+        bar = editor.verticalScrollBar()
+        bar.setValue(bar.value() + editor.cursorRect().center().y() - editor.viewport().height() // 2)
 
 
 class TextDocumentAPI:
