@@ -159,9 +159,10 @@ New entries made this way go into a **Story Bible** folder in the binder.
 (🗣, with the number of speeches and words spoken), mentions in scripts and chapters, and scenes set at a
 location. Click a line to jump there. It refreshes when you switch to the entry, or press **Refresh**.
 
-**In your writing**, Story Bible names are underlined with a dotted line (orange: characters, teal:
-locations). Hover a name to see its description, and **Ctrl-click** (`⌘`-click) it to open the entry. Names are
-suggested while you type a capitalised word, in prose as well as scripts.
+**In your writing**, Story Bible names get a soft highlight (amber: characters, teal: locations), in prose and in
+scripts; the name under the mouse deepens. Hover a name to see its description, and **Ctrl-click** (`⌘`-click)
+it to open the entry. Names are suggested while you type a capitalised word, in prose as well as scripts.
+(Underlines only ever mean a spelling mistake.)
 
 ### Before a character is named
 
@@ -173,7 +174,7 @@ Xardas. Mark those mentions so they still count as Xardas:
   document, **Every “the hooded figure” here is…** marks them all at once. Right-click a marked one to
   **Remove mark**.
 - In the text it's kept as `{the hooded figure|Xardas}`: the braces and the name are shown small and grey, the
-  description is underlined in the character's colour, and hovering shows who it is. Exports print just *the
+  description is highlighted in the character's colour, and hovering shows who it is. Exports print just *the
   hooded figure*, and the hidden name doesn't count towards word counts.
 - **In a script**, a character can speak under a description cue — `HOODED FIGURE`. Right-click the cue →
   **HOODED FIGURE in this script is… → Xardas**. This adds a note, `[[HOODED FIGURE is Xardas]]`, at the end of

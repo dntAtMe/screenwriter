@@ -77,8 +77,16 @@ def main(wanted: set[str]) -> None:
     window.binder.set_synopsis("ch02", "Fog closes over the Rock and the stranger starts asking questions.")
     window._save_structure()
     window._refresh_bible()
+    from screenwriter.bookmarks import Bookmark
+
+    def mark(doc: str, line: int) -> Bookmark:
+        return Bookmark(doc, line, window.project.read_text(window.project.find(doc)).split("\n")[line])
+
+    window.bookmarks = [mark("ch01", 4), mark("ch02", 2), mark("pilot", 23)]  # the Bookmarks list under the binder
+    window._store_bookmarks()
     window.binder.setCurrentItem(None)
     window.splitter.setSizes([213, 811, 256])
+    window.binder_split.setSizes([500, 200])  # all three bookmarks in view
 
     def shoot(name: str, setup) -> None:
         if wanted and name not in wanted:
@@ -124,6 +132,7 @@ def main(wanted: set[str]) -> None:
         window.open_corkboard("manuscript")
 
     def split():
+        window.side.hide()  # two pages side by side want the room
         window.open_document("ch01")
         window.open_document("pilot")
         window.open_document(ids["Mara Quinn"])
@@ -131,7 +140,6 @@ def main(wanted: set[str]) -> None:
         window.editors[ids["Mara Quinn"]].inputs["description"].setCursorPosition(0)
         window.tabs.setCurrentWidget(window.editors["pilot"])
         window.editors["pilot"].jump_to_line(14)
-        window.show_outline()
 
     shoot("screenplay", screenplay)
     shoot("prose", prose)

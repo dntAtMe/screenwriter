@@ -19,9 +19,11 @@
 - **Screenplays that format themselves.** Type plain [Fountain](https://fountain.io) and it's laid out like a script page: `int` becomes `INT.`, a name in caps becomes a character cue, `cut to` becomes a transition. Character names, locations and times of day are suggested as you type.
 - **No markup to memorise.** A formatting toolbar above the page adds screenplay elements, bold, italic, headings and notes for you; hold `Ctrl` or `Alt` to see every shortcut that starts with those keys.
 - **Books and chapters.** A calm, centred writing column with Markdown, word counts, and chapters you can reorder in the binder.
-- **A Story Bible.** Character and location sheets that know where they appear: scenes where a character speaks, how much they say, and every mention in your chapters. Names are underlined in your prose; alternative forms (nicknames, *Kacprowi* for Kacper, or `Kacpr*` for every ending) are recognised too.
+- **A Story Bible.** Character and location sheets that know where they appear: scenes where a character speaks, how much they say, and every mention in your chapters. Names are softly highlighted wherever you write them; alternative forms (nicknames, *Kacprowi* for Kacper, or `Kacpr*` for every ending) are recognised too.
 - **Mind maps and corkboards.** Brainstorm on a canvas of cards, or see a folder of chapters as index cards with synopses and drag them into order.
 - **Ideas, search, outline.** Capture an idea from anywhere, search the whole project, and jump through scenes or headings from the outline. Press `Shift` twice to jump to any document or card by name, and split the view to write with your notes beside you.
+- **Find your way back.** Bookmark a line and jump back with `F2`; link documents with `[[Chapter 3]]`; every document reopens where you left it; switch between recent projects from the header; and run any command by name from the command palette (`Ctrl+Shift+P`).
+- **Calm writing.** Light and dark themes, focus mode, typewriter scrolling that keeps your line in the middle of the screen, and a choice of typewriter fonts with Polish letters.
 - **Export.** Industry-format screenplay PDF, Final Draft (`.fdx`), manuscript PDF and Word (`.docx`), Markdown, and board images.
 - **Nothing gets lost.** Autosave, a full project history with named versions, word-by-word comparison with any earlier version, and restore — of one document or everything.
 - **Sync and share.** Sign in with Google to keep projects in Google Drive, or use any cloud folder (Dropbox, iCloud, OneDrive); work on several computers, with changes merged and nothing overwritten. Send someone a copy as a single file.
@@ -29,7 +31,7 @@
 
 | | |
 |---|---|
-| ![Prose with Story Bible names underlined and the Cast panel](docs/images/prose.png) | ![A Story Bible character entry and where she appears](docs/images/story-bible.png) |
+| ![Prose with Story Bible names highlighted, the Cast panel and bookmarks](docs/images/prose.png) | ![A Story Bible character entry and where she appears](docs/images/story-bible.png) |
 | ![A mind map board](docs/images/board.png) | ![A folder of chapters as a corkboard](docs/images/corkboard.png) |
 
 ## Install

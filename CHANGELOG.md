@@ -6,6 +6,12 @@ All notable changes to Screenwriter are listed here. The format follows
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-10-01
+
+Screenwriter 1.0: a new look throughout, and a round of everyday comforts — switch projects from the header,
+bookmarks, links between documents, a command palette, typewriter scrolling, and every document reopening
+where you left it.
+
 ### Added
 - **Open Recent.** Click the project's name in the header (or press ⌃⌥O) to switch to one of your ten most
   recently opened projects; **File ▸ Open Recent** lists them too, with a way to clear the list.
@@ -179,7 +185,8 @@ The first release.
 - Packages for macOS (`.dmg`), Windows (installer and portable `.zip`) and Linux (`.AppImage`, `.tar.gz`).
 - Released under the MIT License.
 
-[Unreleased]: https://github.com/dntAtMe/screenwriter/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/dntAtMe/screenwriter/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/dntAtMe/screenwriter/compare/v0.7.0...v1.0.0
 [0.7.0]: https://github.com/dntAtMe/screenwriter/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/dntAtMe/screenwriter/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/dntAtMe/screenwriter/compare/v0.4.0...v0.5.0

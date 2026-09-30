@@ -496,7 +496,7 @@ class MainWindow(QMainWindow):
         self.binder_split.setStretchFactor(1, 0)
         bottom.setMinimumHeight(56)
         if not self.binder_split.restoreState(self.settings.value("binder_split", b"")):
-            self.binder_split.setSizes([600, 150])
+            self.binder_split.setSizes([560, 190])  # room for three bookmarks
         self.binder_split.splitterMoved.connect(
             lambda *_: self.settings.setValue("binder_split", self.binder_split.saveState()))
 
