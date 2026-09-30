@@ -685,3 +685,41 @@ def test_tab_shows_unsaved_changes_until_saved(qapp, sample_project):
     editor.textCursor().insertText("Again. ")
     assert w.tabs.tabText(w.tabs.indexOf(editor)) == "Renamed" + UNSAVED_DOT
     dispose(w)
+
+
+def test_documents_reopen_where_you_were(qapp, sample_project):
+    from PySide6.QtCore import QSettings
+
+    from screenwriter.mainwindow import MainWindow
+
+    QSettings().clear()
+    w = MainWindow()
+    w.resize(900, 300)
+    w.show()
+    w.open_project(sample_project)
+    w.open_document("ch01")
+    editor = w.editors["ch01"]
+    cursor = editor.textCursor()
+    cursor.setPosition(len(editor.text()) - 5)
+    editor.setTextCursor(cursor)
+    editor.centerCursor()
+    qapp.processEvents()
+    scrolled = editor.verticalScrollBar().value()
+    w.close_tab(w.tabs.indexOf(editor))
+    w.open_document("ch02")  # (opening another doesn't forget it)
+    w.open_document("ch01")
+    qapp.processEvents()
+    editor = w.editors["ch01"]
+    assert editor.textCursor().position() == len(editor.text()) - 5
+    assert editor.verticalScrollBar().value() == scrolled
+
+    w.close_project()  # and across projects opening and closing
+    w.open_project(sample_project)
+    w.open_document("ch01")
+    assert w.editors["ch01"].textCursor().position() == len(editor.text()) - 5
+
+    w.open_at("ch02", 3, 2)  # a search result wins over the remembered place
+    qapp.processEvents()
+    assert w.editors["ch02"].textCursor().selectionStart() == 3
+    QSettings().clear()
+    dispose(w)

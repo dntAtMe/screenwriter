@@ -1,4 +1,5 @@
 import html
+import json
 import sys
 from datetime import datetime
 import re
@@ -940,6 +941,7 @@ class MainWindow(QMainWindow):
         index = self.tabs.addTab(editor, node.title)  # no icon: the macOS style elides titles of tabs with icons
         self.tabs.setCurrentIndex(index)
         editor.setFocus()
+        self._restore_position(editor)
 
     def _editing(self) -> None:
         if self.save_timer.isActive():
@@ -968,6 +970,7 @@ class MainWindow(QMainWindow):
                 editor.unsaved = False
                 self._show_tab_title(editor)
         self._guess_languages(e.text() for e in self.editors.values() if hasattr(e, "text"))
+        self._store_positions()
         self.save_label.setText(f"✓ Saved {datetime.now():%H:%M}")
 
     # --- history ------------------------------------------------------------------
@@ -1895,6 +1898,50 @@ class MainWindow(QMainWindow):
         if index >= 0:
             title = self._tab_title(editor, self._node_title(editor.node_id))
             self.tabs.setTabText(index, title + (UNSAVED_DOT if getattr(editor, "unsaved", False) else ""))
+
+    # --- where you were in each document ---------------------------------------------
+
+    @staticmethod
+    def _text_widget(editor):
+        """The text box of an editor (a bible entry's notes), or None for boards and corkboards."""
+        widget = editor.notes if isinstance(editor, BibleEditor) else editor
+        return widget if isinstance(widget, (ProseEditor, ScreenplayEditor)) else None
+
+    def _positions(self) -> dict:
+        try:
+            return json.loads(self.settings.value(f"positions/{self.project.id}", "{}") or "{}")
+        except (TypeError, ValueError):
+            return {}
+
+    def _store_positions(self) -> None:
+        """Remember the cursor and scroll position of every open document (on this computer)."""
+        if self.project is None:
+            return
+        positions = self._positions()
+        for node_id, editor in self.editors.items():
+            if (box := self._text_widget(editor)) is not None and getattr(editor, "position_restored", False):
+                positions[node_id] = [box.textCursor().position(), box.verticalScrollBar().value()]
+        known = {n.id for n in walk(self.binder.to_nodes())}
+        positions = {k: v for k, v in positions.items() if k in known}
+        self.settings.setValue(f"positions/{self.project.id}", json.dumps(positions))
+
+    def _restore_position(self, editor) -> None:
+        """Put the cursor back where it was when the document was last open, scrolled as it was."""
+        box = self._text_widget(editor)
+        saved = self._positions().get(editor.node_id) if box is not None else None
+        editor.position_restored = True  # from now on its position is worth remembering
+        if not saved:
+            return
+        pos = max(0, min(int(saved[0]), box.document().characterCount() - 1))
+        cursor = box.textCursor()
+        cursor.setPosition(pos)
+        box.setTextCursor(cursor)
+
+        def scroll() -> None:  # once laid out; not if the cursor has been sent elsewhere meanwhile
+            if box.textCursor().position() == pos:
+                box.verticalScrollBar().setValue(int(saved[1]))
+
+        QTimer.singleShot(0, scroll)
 
     def _mark_unsaved(self, editor) -> None:
         if not getattr(editor, "unsaved", False):
