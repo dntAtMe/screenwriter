@@ -1,3 +1,4 @@
+import html
 import re
 
 from PySide6.QtCore import QEvent, QObject, QTimer
@@ -167,6 +168,70 @@ def paint_margins_as_page(editor: QAbstractScrollArea) -> None:
     editor.installEventFilter(_PageMargins(editor))
 
 
+# --- links between documents: [[Chapter 3]] ---------------------------------------------------
+# A [[note]] that names a document is also a link to it: ⌘/Ctrl-click opens it. Like every
+# note it's never printed, so links are for finding your way, not part of the text.
+
+LINK_RE = re.compile(r"\[\[([^\[\]\n]+?)\]\]")
+
+
+def link_spans(text: str, links: dict[str, str]) -> list[tuple[int, int, str]]:
+    """(start, end, node id) of the title inside each [[link]] in a line; `links` maps
+    lower-case document titles to their ids."""
+    out = []
+    for m in LINK_RE.finditer(text):
+        if node_id := links.get(m.group(1).strip().lower()):
+            out.append((m.start(1), m.end(1), node_id))
+    return out
+
+
+def format_links(highlighter, text: str, links: dict[str, str]) -> None:
+    """Links in the accent colour, their brackets faint (no underline: that's for spelling)."""
+    from PySide6.QtGui import QColor, QFont, QTextCharFormat
+
+    from .. import theme
+
+    for start, end, _ in link_spans(text, links):
+        for i in range(start, end):
+            f = highlighter.format(i)
+            f.setForeground(QColor(theme.tokens()["accent"]))
+            f.setFontItalic(False)
+            f.setFontWeight(QFont.Weight.DemiBold)
+            highlighter.setFormat(i, 1, f)
+
+
+def link_at(editor, pos) -> str | None:
+    """The id of the document linked at a viewport position, or None."""
+    links = getattr(editor, "links", None)
+    if not links:
+        return None
+    cursor = editor.cursorForPosition(pos)
+    offset = cursor.positionInBlock()
+    return next((node_id for start, end, node_id in link_spans(cursor.block().text(), links)
+                 if start <= offset <= end), None)
+
+
+def show_link_tip(editor, e, titles: dict[str, str]) -> bool:
+    """A tooltip for the link under the mouse; whether there was one."""
+    from PySide6.QtWidgets import QToolTip
+
+    if (node_id := link_at(editor, e.pos())) is None:
+        return False
+    title = html.escape(titles.get(node_id, ""))
+    QToolTip.showText(e.globalPos(), f"<b>Open “{title}”</b><br><i>⌘/Ctrl-click</i>", editor.viewport())
+    return True
+
+
+def quiet_rehighlight(editor) -> None:
+    """Re-colour an editor's text (new names, links, theme) without it looking like an edit:
+    the editor would otherwise say textChanged, and the document would count as unsaved."""
+    blocked = editor.blockSignals(True)
+    try:
+        editor.highlighter.rehighlight()
+    finally:
+        editor.blockSignals(blocked)
+
+
 class Typewriter(QObject):
     """Typewriter scrolling: as you type, the line you're on stays in the middle of the
     editor instead of creeping to the bottom edge. Clicking elsewhere doesn't scroll;
@@ -277,7 +342,7 @@ class TextDocumentAPI:
             cursor.setPosition(min(end, self.document().characterCount() - 1), QTextCursor.MoveMode.KeepAnchor)
             self._comment_cursors[comment_id] = cursor
         self._active_comment = active
-        self.highlighter.rehighlight()
+        quiet_rehighlight(self)
 
     def comment_spans(self) -> list[tuple[int, int, str]]:
         """(start, end, comment id) where each comment's words are now (gone ones left out)."""

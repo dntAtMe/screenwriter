@@ -19,7 +19,11 @@ from .biblemenu import add_bible_menu, add_mark_menu
 from .spellmenu import add_comment_action, add_spelling_menu
 from .common import (
     TextDocumentAPI,
+    format_links,
+    link_at,
     mark_bible_names,
+    quiet_rehighlight,
+    show_link_tip,
     update_name_hover,
     center_column,
     paint_margins_as_page,
@@ -63,6 +67,7 @@ class MarkdownHighlighter(QSyntaxHighlighter):
             "marker": _fmt(color="#9aa0a8"),
         }
         self.bible = BibleIndex()
+        self.links: dict[str, str] = {}  # lower-case document title → id, for [[links]]
         self.spell = None  # the SpellService, set by the window
 
     def highlightBlock(self, text: str) -> None:
@@ -80,6 +85,7 @@ class MarkdownHighlighter(QSyntaxHighlighter):
         for regex, name in self.INLINE:
             for m in regex.finditer(text):
                 self.setFormat(m.start(), m.end() - m.start(), self.formats[name])
+        format_links(self, text, self.links)
         tag = _fmt(color="#a0a4ab", scale=0.72, base=self.base_font)  # (follows zoom)
         for m in MARK_RE.finditer(text):  # {the hooded figure|Xardas}: the tag faint, the phrase as written
             self.setFormat(m.start(), 1, tag)
@@ -105,6 +111,7 @@ class ProseEditor(TextDocumentAPI, QPlainTextEdit):
     bibleOpenRequested = Signal(str)  # entry node id
     bibleAddRequested = Signal(str, str)  # kind, name
     bibleAliasRequested = Signal(str, str)  # entry node id, another name for it
+    linkOpenRequested = Signal(str)  # node id of a [[linked]] document
     addWordRequested = Signal(str)  # to the project dictionary
     commentRequested = Signal()  # on the selected text
 
@@ -128,6 +135,15 @@ class ProseEditor(TextDocumentAPI, QPlainTextEdit):
         self.completer.setModel(QStringListModel(self.completer))
         self.completer.activated[str].connect(self._insert_completion)
 
+        self.link_titles: dict[str, str] = {}  # node id → title
+        self.link_completer = QCompleter(self)  # after [[: document titles
+        self.link_completer.setWidget(self)
+        self.link_completer.setCompletionMode(QCompleter.CompletionMode.PopupCompletion)
+        self.link_completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        self.link_completer.setFilterMode(Qt.MatchFlag.MatchContains)
+        self.link_completer.setModel(QStringListModel(self.link_completer))
+        self.link_completer.activated[str].connect(self._insert_link)
+
     # --- story bible ------------------------------------------------------------------
 
     @property
@@ -135,7 +151,7 @@ class ProseEditor(TextDocumentAPI, QPlainTextEdit):
         return self.highlighter.bible
 
     def refresh_theme(self) -> None:
-        self.highlighter.rehighlight()  # name tints are lighter or deeper in dark mode
+        quiet_rehighlight(self)  # name tints are lighter or deeper in dark mode
 
     def set_bible(self, index: BibleIndex) -> None:
         """Use these names for underlining, hover cards and completion."""
@@ -143,8 +159,56 @@ class ProseEditor(TextDocumentAPI, QPlainTextEdit):
         if signature(index) == signature(self.bible):
             return
         self.highlighter.bible = index
-        self.highlighter.rehighlight()
+        quiet_rehighlight(self)
         self.completer.model().setStringList([n for n in index.completions() if n[:1].isupper()])
+
+    # --- links between documents ----------------------------------------------------------
+
+    @property
+    def links(self) -> dict[str, str]:
+        return self.highlighter.links
+
+    def set_links(self, titles: dict[str, str]) -> None:
+        """Documents that [[Title]] can link to: {node id: title}."""
+        if titles == self.link_titles:
+            return
+        self.link_titles = dict(titles)
+        links: dict[str, str] = {}
+        for node_id, title in titles.items():
+            links.setdefault(title.strip().lower(), node_id)  # the first of two with one name
+        self.highlighter.links = links
+        quiet_rehighlight(self)
+        self.link_completer.model().setStringList(sorted(set(titles.values()), key=str.lower))
+
+    def _update_link_completion(self) -> bool:
+        """After "[[", offer document titles; whether the popup is up."""
+        popup = self.link_completer.popup()
+        cursor = self.textCursor()
+        before = cursor.block().text()[: cursor.positionInBlock()]
+        m = re.search(r"\[\[([^\[\]]*)$", before)
+        if not m or not self.link_titles:
+            popup.hide()
+            return False
+        self.link_completer.setCompletionPrefix(m.group(1))
+        if self.link_completer.completionCount() == 0:
+            popup.hide()
+            return False
+        popup.setCurrentIndex(self.link_completer.completionModel().index(0, 0))
+        rect = self.cursorRect().translated(self.viewport().pos())
+        rect.setWidth(popup.sizeHintForColumn(0) + popup.verticalScrollBar().sizeHint().width() + 16)
+        self.link_completer.complete(rect)
+        return True
+
+    def _insert_link(self, title: str) -> None:
+        cursor = self.textCursor()
+        cursor.movePosition(
+            QTextCursor.MoveOperation.Left, QTextCursor.MoveMode.KeepAnchor, len(self.link_completer.completionPrefix())
+        )
+        closed = cursor.block().text()[cursor.positionInBlock() + len(cursor.selectedText()):].startswith("]]")
+        cursor.insertText(title if closed else title + "]]")
+        if closed:
+            cursor.movePosition(QTextCursor.MoveOperation.Right, n=2)
+        self.setTextCursor(cursor)
 
     def bible_at(self, pos):
         """The bible entry named at a viewport position, or None."""
@@ -165,7 +229,7 @@ class ProseEditor(TextDocumentAPI, QPlainTextEdit):
                     f"<b>{html.escape(entry.name)}</b> · {kind}{summary}<br><i>⌘/Ctrl-click to open</i>",
                     self.viewport(),
                 )
-            else:
+            elif not show_link_tip(self, e, self.link_titles):
                 QToolTip.hideText()
             return True
         return super().viewportEvent(e)
@@ -175,11 +239,14 @@ class ProseEditor(TextDocumentAPI, QPlainTextEdit):
             if entry := self.bible_at(e.position().toPoint()):
                 self.bibleOpenRequested.emit(entry.node_id)
                 return
+            if node_id := link_at(self, e.position().toPoint()):
+                self.linkOpenRequested.emit(node_id)
+                return
         super().mousePressEvent(e)
 
     def mouseMoveEvent(self, e):
         pos = e.position().toPoint()
-        over = e.modifiers() & Qt.KeyboardModifier.ControlModifier and self.bible_at(pos)
+        over = e.modifiers() & Qt.KeyboardModifier.ControlModifier and (self.bible_at(pos) or link_at(self, pos))
         self.viewport().setCursor(Qt.CursorShape.PointingHandCursor if over else Qt.CursorShape.IBeamCursor)
         update_name_hover(self, self.highlighter, self.bible, pos)
         super().mouseMoveEvent(e)
@@ -220,12 +287,15 @@ class ProseEditor(TextDocumentAPI, QPlainTextEdit):
 
     def keyPressEvent(self, e):
         popup = self.completer.popup()
-        if popup.isVisible() and e.key() in (
+        if (popup.isVisible() or self.link_completer.popup().isVisible()) and e.key() in (
             Qt.Key.Key_Enter, Qt.Key.Key_Return, Qt.Key.Key_Escape, Qt.Key.Key_Tab, Qt.Key.Key_Backtab,
         ):
             e.ignore()  # the completer handles these
             return
         super().keyPressEvent(e)
+        if e.text() and (e.text().isprintable() or e.key() == Qt.Key.Key_Backspace) and self._update_link_completion():
+            popup.hide()
+            return
         if self.bible and e.text() and (e.text().isprintable() or e.key() == Qt.Key.Key_Backspace):
             self._update_completion()
         else:
@@ -295,7 +365,7 @@ class ProseEditor(TextDocumentAPI, QPlainTextEdit):
     def _set_base_font(self, font) -> None:
         self.setFont(font)
         self.highlighter.base_font = font
-        self.highlighter.rehighlight()
+        quiet_rehighlight(self)
         self._recenter()
 
     def _recenter(self) -> None:

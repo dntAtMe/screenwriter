@@ -24,7 +24,7 @@ As you type:
 import math
 from typing import Callable
 
-from PySide6.QtCore import QStringListModel, Qt, QTimer, Signal
+from PySide6.QtCore import QEvent, QStringListModel, Qt, QTimer, Signal
 from PySide6.QtGui import (
     QColor,
     QFont,
@@ -48,7 +48,11 @@ from .spellmenu import add_comment_action, add_spelling_menu
 from .history import TextHistory
 from .common import (
     TextDocumentAPI,
+    format_links,
+    link_at,
     mark_bible_names,
+    quiet_rehighlight,
+    show_link_tip,
     update_name_hover,
     tint,
     center_column,
@@ -136,6 +140,7 @@ class FountainHighlighter(QSyntaxHighlighter):
         for regex, fmt in self.INLINE:
             for m in regex.finditer(text):
                 self.setFormat(m.start(), m.end() - m.start(), fmt)
+        format_links(self, text, self.editor.links)
         if el not in (El.TITLE_PAGE, El.SECTION, El.SYNOPSIS):
             mark_bible_names(self, text, self.editor.bible_index)
         for m in MARK_RE.finditer(text):  # {the hooded figure|Xardas}: the tag faint, the phrase tinted
@@ -156,6 +161,9 @@ class ScreenplayEditor(TextDocumentAPI, QTextEdit):
     statsChanged = Signal()
     elementChanged = Signal(str)
     bibleRequested = Signal(str, str)  # "character" | "location", NAME
+    linkOpenRequested = Signal(str)  # node id of a [[linked]] document
+    links: dict[str, str] = {}  # lower-case document title → id, for [[links]]
+    link_titles: dict[str, str] = {}  # node id → title
     bibleAddRequested = Signal(str, str)  # kind, selected text
     bibleAliasRequested = Signal(str, str)  # entry node id, selected text
     addWordRequested = Signal(str)  # to the project dictionary
@@ -173,13 +181,38 @@ class ScreenplayEditor(TextDocumentAPI, QTextEdit):
         changed = signature(index) != signature(self._bible)
         self._bible = index
         if changed and hasattr(self, "highlighter"):
-            self.highlighter.rehighlight()
+            quiet_rehighlight(self)
 
     def refresh_theme(self) -> None:
-        self.highlighter.rehighlight()  # name tints are lighter or deeper in dark mode
+        quiet_rehighlight(self)  # name tints are lighter or deeper in dark mode
+
+    def set_links(self, titles: dict[str, str]) -> None:
+        """Documents that [[Title]] can link to: {node id: title}."""
+        if titles == self.link_titles:
+            return
+        self.link_titles = dict(titles)
+        self.links = {}
+        for node_id, title in titles.items():
+            self.links.setdefault(title.strip().lower(), node_id)
+        quiet_rehighlight(self)
+
+    def mousePressEvent(self, e):
+        if e.modifiers() & Qt.KeyboardModifier.ControlModifier and e.button() == Qt.MouseButton.LeftButton:
+            if node_id := link_at(self, e.position().toPoint()):
+                self.linkOpenRequested.emit(node_id)
+                return
+        super().mousePressEvent(e)
+
+    def viewportEvent(self, e):
+        if e.type() == QEvent.Type.ToolTip and show_link_tip(self, e, self.link_titles):
+            return True
+        return super().viewportEvent(e)
 
     def mouseMoveEvent(self, e):
-        update_name_hover(self, self.highlighter, self._bible, e.position().toPoint())
+        pos = e.position().toPoint()
+        over = e.modifiers() & Qt.KeyboardModifier.ControlModifier and link_at(self, pos)
+        self.viewport().setCursor(Qt.CursorShape.PointingHandCursor if over else Qt.CursorShape.IBeamCursor)
+        update_name_hover(self, self.highlighter, self._bible, pos)
         super().mouseMoveEvent(e)
 
     def leaveEvent(self, e):

@@ -905,6 +905,7 @@ class MainWindow(QMainWindow):
             editor.bible_lookup = self._find_bible_entry
             editor.bible_index = self.bible_index
             editor.bibleRequested.connect(self.open_bible_entry)
+            editor.linkOpenRequested.connect(self.open_document)
             self._connect_bible_menu(editor)
             editor.spell = self.spell
             editor.addWordRequested.connect(self.add_spelling_word)
@@ -916,6 +917,7 @@ class MainWindow(QMainWindow):
             editor.textChanged.connect(self.bible_timer.start)
             editor.notes.set_bible(self.bible_index)
             editor.notes.bibleOpenRequested.connect(self.open_document)
+            editor.notes.linkOpenRequested.connect(self.open_document)
             self._connect_bible_menu(editor.notes)
             editor.notes.highlighter.spell = self.spell
             editor.notes.addWordRequested.connect(self.add_spelling_word)
@@ -927,6 +929,7 @@ class MainWindow(QMainWindow):
             editor = ProseEditor()
             editor.set_bible(self.bible_index)
             editor.bibleOpenRequested.connect(self.open_document)
+            editor.linkOpenRequested.connect(self.open_document)
             self._connect_bible_menu(editor)
             editor.highlighter.spell = self.spell
             editor.addWordRequested.connect(self.add_spelling_word)
@@ -948,6 +951,8 @@ class MainWindow(QMainWindow):
         self.tabs.setCurrentIndex(index)
         editor.setFocus()
         self._restore_position(editor)
+        if (box := self._text_widget(editor)) is not None:
+            box.set_links(self._link_titles())
         if (box := self._text_widget(editor)) is not None:
             box.typewriter = Typewriter(box)
             box.typewriter.set_enabled(self.typewriter_action.isChecked())
@@ -2189,7 +2194,19 @@ class MainWindow(QMainWindow):
                 editor.notes.set_bible(self.bible_index)
             elif isinstance(editor, ScreenplayEditor):
                 editor.bible_index = self.bible_index
+        titles = self._link_titles()
+        for editor in self.editors.values():
+            if (box := self._text_widget(editor)) is not None:
+                box.set_links(titles)
         self._refresh_cast()
+
+    def _link_titles(self) -> dict[str, str]:
+        """{node id: title} of everything a [[link]] can open: documents and folders, not the Trash."""
+        if self.project is None:
+            return {}
+        nodes = self.binder.to_nodes()
+        trashed = {n.id for t in nodes if t.kind == TRASH for n in walk([t])}
+        return {n.id: n.title for n in walk(nodes) if n.id not in trashed and n.title.strip()}
 
     def _refresh_cast(self) -> None:
         editor = self.tabs.currentWidget()
