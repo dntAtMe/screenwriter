@@ -8,6 +8,7 @@ from PySide6.QtCore import QSettings, QSize, QStandardPaths, Qt, QTimer, QUrl, S
 from PySide6.QtGui import QAction, QActionGroup, QDesktopServices, QIcon, QKeySequence
 from PySide6.QtWidgets import (
     QApplication,
+    QDialog,
     QFileDialog,
     QHBoxLayout,
     QInputDialog,
@@ -59,7 +60,8 @@ from .synctargets import GDRIVE_PREFIX, DriveTarget, FolderTarget, TargetError, 
 from . import board
 from .editors.board import BoardEditor
 from .editors.bible import BibleEditor
-from . import bible
+from . import bible, campaign
+from .newproject import BLANK, CAMPAIGN, NewProjectDialog
 from .outline import OutlinePanel
 from .search import FindBar, SearchPanel
 from .editors.prose import ProseEditor
@@ -185,6 +187,8 @@ class Welcome(QWidget):
         subtitle.setObjectName("WelcomeSubtitle")
         self.buttons = [
             ("plus", "New Project", "Start a screenplay, a novel, or both", window.new_project),
+            ("dice", "New Campaign", "Prep sessions, NPCs and places for a tabletop game",
+             lambda: window.new_project(CAMPAIGN)),
             ("open", "Open Project…", "A project folder on this computer", window.open_project_dialog),
             ("cloud", "Open Project File…", "A synced .screenwriter file, or a copy someone sent you", window.open_project_file),
         ]
@@ -615,6 +619,8 @@ class MainWindow(QMainWindow):
         ):
             self.project_actions.append(self._action(insert, label, lambda _=False, k=kind: self.binder.add(k), shortcut))
         insert.addSeparator()
+        self.project_actions.append(self._action(insert, "New Session", self.new_session, "Ctrl+Alt+E"))
+        insert.addSeparator()
         self.project_actions.append(self._action(insert, "Capture Idea…", self.capture_idea, "Ctrl+Shift+I"))
         self.project_actions.append(self._action(insert, "Comment…", self.add_comment, "Ctrl+Shift+M"))
 
@@ -709,18 +715,44 @@ class MainWindow(QMainWindow):
 
     # --- projects ---------------------------------------------------------------
 
-    def new_project(self) -> None:
-        name, ok = QInputDialog.getText(self, "New Project", "Project name:")
-        if not ok or not name.strip():
+    def new_project(self, template: str = BLANK) -> None:
+        dialog = NewProjectDialog(self, template)
+        if dialog.exec() != QDialog.DialogCode.Accepted or not dialog.project_name():
             return
+        name = dialog.project_name()
         parent = QFileDialog.getExistingDirectory(self, "Where should the project folder go?", str(Path.home() / "Documents"))
         if not parent:
             return
-        path = Path(parent) / name.strip()
+        path = Path(parent) / name
         if path.exists():
             QMessageBox.warning(self, "New Project", f"{path} already exists.")
             return
-        self._activate(Project.create(path, name.strip()))
+        self.create_project(path, name, dialog.template())
+
+    def create_project(self, path: Path, name: str, template: str = BLANK) -> None:
+        project = Project.create(path, name)
+        if template == CAMPAIGN:
+            campaign.create_campaign(project)
+        self._activate(project)
+        if template == CAMPAIGN:
+            overview = next((n for n in project.documents((NOTE,)) if n.title == "Campaign Overview"), None)
+            if overview is not None:
+                self.open_document(overview.id)
+
+    def new_session(self) -> None:
+        """A numbered session note in the Sessions folder, from the prep template, with
+        what happened last session as its recap."""
+        if self.project is None:
+            return
+        self.save_all()
+        self.project.root = self.binder.to_nodes()
+        docs = self.project.documents((NOTE, PROSE))
+        previous = campaign.sessions(docs)
+        title = campaign.next_title(docs)
+        node = self.project.new_node(NOTE, title)
+        self.project.write_text(node, campaign.session_text(title, self._text_of(previous[-1]) if previous else ""))
+        self.binder.insert_node(node, self.binder.folder(campaign.SESSIONS))
+        self.open_document(node.id)
 
     def open_project_dialog(self) -> None:
         folder = QFileDialog.getExistingDirectory(self, "Open Project Folder", str(Path.home() / "Documents"))
@@ -1967,13 +1999,13 @@ class MainWindow(QMainWindow):
     # --- story bible ----------------------------------------------------------------
 
     def _scan_documents(self) -> list[tuple[str, str, str, str]]:
-        """Scripts and prose to look for bible entries in: (id, title, kind, text)."""
+        """Scripts, prose and notes to look for bible entries in: (id, title, kind, text)."""
         if self.project is None:
             return []
         self.project.root = self.binder.to_nodes()
         return [
             (n.id, n.title, "screenplay" if n.kind == SCREENPLAY else "prose", self._text_of(n))
-            for n in self.project.documents((SCREENPLAY, PROSE))
+            for n in self.project.documents((SCREENPLAY, PROSE, NOTE))
         ]
 
     def _bible_entries(self, kinds=BIBLE_KINDS):
@@ -2000,7 +2032,7 @@ class MainWindow(QMainWindow):
             self.open_document(node_id)
             return
         title = name.title() if name.isupper() else name  # MARA → Mara; prose keeps its casing
-        node_id = self.binder.add(kind, title, parent=self.binder.folder("Story Bible"), edit=False)
+        node_id = self.binder.add(kind, title, parent=self._bible_folder(kind), edit=False)
         editor = self.editors.get(node_id)
         if isinstance(editor, BibleEditor) and name.isupper() and title.upper() != name:
             editor.inputs["aliases"].setText(name)
@@ -2008,6 +2040,13 @@ class MainWindow(QMainWindow):
         self.save_all()
         self._refresh_bible()
         self.statusBar().showMessage(f"Added “{title}” to the Story Bible", 3000)
+
+    def _bible_folder(self, kind: str):
+        """Where a new entry goes: a campaign's folder for its kind (NPCs, Factions…), else "Story Bible"."""
+        title = campaign.KIND_FOLDERS.get(kind)
+        if title and any(n.kind == FOLDER and n.title == title for n in self.binder.to_nodes()):
+            return self.binder.folder(title)
+        return self.binder.folder("Story Bible")
 
     def add_bible_alias(self, node_id: str, name: str) -> None:
         """Record another form of an entry's name, e.g. "Kacprowi" for Kacper."""

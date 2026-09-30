@@ -117,6 +117,15 @@ def _item(p: QPainter) -> None:  # a cut gem
     p.drawPath(_path((9.5, 4), (8, 9), (12, 20.5), (16, 9), (14.5, 4)))
 
 
+@drawing("dice")
+def _dice(p: QPainter) -> None:  # a twenty-sided die: a hexagon around a triangle
+    p.drawPath(_path((12, 2.5), (20.5, 7.3), (20.5, 16.7), (12, 21.5), (3.5, 16.7), (3.5, 7.3), close=True))
+    p.drawPath(_path((12, 7.5), (16.8, 15.5), (7.2, 15.5), close=True))
+    for a, b in (((12, 2.5), (12, 7.5)), ((20.5, 16.7), (16.8, 15.5)), ((3.5, 16.7), (7.2, 15.5)),
+                 ((3.5, 7.3), (12, 7.5)), ((20.5, 7.3), (12, 7.5)), ((12, 21.5), (7.2, 15.5)), ((12, 21.5), (16.8, 15.5))):
+        p.drawLine(QPointF(*a), QPointF(*b))
+
+
 @drawing("folder")
 def _folder(p: QPainter) -> None:
     p.drawPath(_path((3, 6.5), (3, 19), (21, 19), (21, 8.5), (12.5, 8.5), (10.5, 5.5), (4, 5.5), (3, 6.5), close=True))

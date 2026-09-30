@@ -10,6 +10,14 @@ All notable changes to Screenwriter are listed here. The format follows
 - **Factions and Items** in the Story Bible, next to Characters and Locations: guilds, cults and kingdoms
   with their leader and aims; artefacts and treasure with their type, rarity and who holds them. Their
   names are found and highlighted in your writing like any other entry (Insert ▸ New Faction ⌥⌃F / New Item ⌥⌃I).
+- **Tabletop campaigns.** New Project asks what you're starting; a *Tabletop campaign* (also **New Campaign**
+  on the start screen) comes with folders for sessions, adventures, player characters, NPCs, locations,
+  factions and items, a campaign overview (pitch, safety tools, the party), world lore, random tables and a
+  relationship board. New Story Bible entries go into the matching folder.
+- **Sessions.** Insert ▸ New Session (⌥⌃E) adds the next numbered session from a prep template — recap,
+  strong start, scenes, secrets & clues, NPCs, treasure — and fills its recap from what you noted during
+  the last one.
+- Notes are now searched for Story Bible names too, so an NPC's *Appears in* lists the sessions they were in.
 
 ### Changed
 - **A new look.** Calm, modern styling in light and dark: soft panel colours, rounded selection, pill-shaped
