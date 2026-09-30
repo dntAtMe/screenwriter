@@ -70,6 +70,7 @@ from .project import BIBLE_KINDS, BOARD, CHARACTER, DOCUMENT_KINDS, LOCATION, FO
 
 APP_NAME = "Screenwriter"
 MAX_RECENT = 10
+UNSAVED_DOT = "  •"  # after a tab's title while its changes wait to be saved
 
 
 class SideTabs(QTabWidget):
@@ -927,6 +928,7 @@ class MainWindow(QMainWindow):
         editor.set_text(self.project.read_text(node))
         editor.textChanged.connect(self.save_timer.start)
         editor.textChanged.connect(self._editing)
+        editor.textChanged.connect(lambda e=editor: self._mark_unsaved(e))
         editor.textChanged.connect(self._typed)
         editor.statsChanged.connect(lambda e=editor: self._update_stats(e))
         editor.textChanged.connect(lambda e=editor: self._schedule_outline(e))
@@ -962,6 +964,9 @@ class MainWindow(QMainWindow):
                 if node:
                     self.project.write_text(node, editor.text())
                 editor.mark_saved()
+            if getattr(editor, "unsaved", False):
+                editor.unsaved = False
+                self._show_tab_title(editor)
         self._guess_languages(e.text() for e in self.editors.values() if hasattr(e, "text"))
         self.save_label.setText(f"✓ Saved {datetime.now():%H:%M}")
 
@@ -1196,7 +1201,7 @@ class MainWindow(QMainWindow):
                 if node is None:
                     self._remove_tab(self.tabs.indexOf(editor))
                 else:
-                    self.tabs.setTabText(self.tabs.indexOf(editor), self._tab_title(editor, node.title))
+                    self._show_tab_title(editor)
             self.binder.structureChanged.emit()  # corkboards follow
         for path in changed:
             node = self.project.find(self._node_id_for(path))
@@ -1876,13 +1881,25 @@ class MainWindow(QMainWindow):
 
     def _on_renamed(self, node_id: str, title: str) -> None:
         if editor := self.editors.get(node_id):
-            self.tabs.setTabText(self.tabs.indexOf(editor), self._tab_title(editor, title))
+            self._show_tab_title(editor)
             if isinstance(editor, BibleEditor):
                 editor.set_name(title)
 
     @staticmethod
     def _tab_title(editor, title: str) -> str:
         return f"{title} — Corkboard" if isinstance(editor, CorkboardView) else title
+
+    def _show_tab_title(self, editor) -> None:
+        """The document's name on its tab, with a dot while it has changes not yet saved."""
+        index = self.tabs.indexOf(editor)
+        if index >= 0:
+            title = self._tab_title(editor, self._node_title(editor.node_id))
+            self.tabs.setTabText(index, title + (UNSAVED_DOT if getattr(editor, "unsaved", False) else ""))
+
+    def _mark_unsaved(self, editor) -> None:
+        if not getattr(editor, "unsaved", False):
+            editor.unsaved = True
+            self._show_tab_title(editor)
 
     def open_corkboard(self, folder_id: str) -> None:
         if folder_id in self.editors:
@@ -1914,7 +1931,7 @@ class MainWindow(QMainWindow):
         if title := title.strip():
             self.binder.rename(node_id, title)
             if editor := self.editors.get(node_id):
-                self.tabs.setTabText(self.tabs.indexOf(editor), title)
+                self._show_tab_title(editor)
 
     def _on_deleted(self, node_ids: list[str]) -> None:
         for node_id in node_ids:

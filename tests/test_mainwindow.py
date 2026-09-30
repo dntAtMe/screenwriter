@@ -224,7 +224,7 @@ def test_bible_name_and_binder_title_stay_in_sync(window):
     editor.inputs["name"].setText("Ada")
     editor.inputs["name"].textEdited.emit("Ada")
     assert window.binder.find_item(entry_id).text(0) == "Ada"
-    assert window.tabs.tabText(window.tabs.indexOf(editor)) == "Ada"
+    assert window.tabs.tabText(window.tabs.indexOf(editor)) == "Ada  •"  # named, not saved yet
     item = window.binder.find_item(entry_id)
     item.setText(0, "Ada Lovelace")  # inline rename in the binder
     assert editor.inputs["name"].text() == "Ada Lovelace"
@@ -662,4 +662,26 @@ def test_open_recent_lists_projects_and_switches(qapp, tmp_path):
     QSettings().setValue("recent", str(paths[0]))  # a single saved path comes back as a string
     assert w._recent() == [str(paths[0])]
     QSettings().clear()
+    dispose(w)
+
+
+def test_tab_shows_unsaved_changes_until_saved(qapp, sample_project):
+    from PySide6.QtCore import QSettings
+
+    from screenwriter.mainwindow import UNSAVED_DOT, MainWindow
+
+    QSettings().clear()
+    w = MainWindow()
+    w.open_project(sample_project)
+    w.open_document("ch01")
+    editor = w.editors["ch01"]
+    title = w.tabs.tabText(w.tabs.indexOf(editor))
+    assert not title.endswith(UNSAVED_DOT)
+    editor.textCursor().insertText("More. ")
+    assert w.tabs.tabText(w.tabs.indexOf(editor)) == title + UNSAVED_DOT
+    w.save_timer.timeout.emit()  # autosave
+    assert w.tabs.tabText(w.tabs.indexOf(editor)) == title
+    w.binder.rename("ch01", "Renamed")
+    editor.textCursor().insertText("Again. ")
+    assert w.tabs.tabText(w.tabs.indexOf(editor)) == "Renamed" + UNSAVED_DOT
     dispose(w)
