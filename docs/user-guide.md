@@ -10,6 +10,7 @@ On macOS, `Ctrl` in every shortcut below means `⌘` (Command), and `Alt` means 
 - [Corkboard](#corkboard)
 - [Outline, Cast, search and find](#outline-cast-search-and-find)
 - [Capturing ideas](#capturing-ideas)
+- [Running a tabletop campaign](#running-a-tabletop-campaign)
 - [History and versions](#history-and-versions)
 - [Sync, backup and sharing](#sync-backup-and-sharing)
 - [Exporting](#exporting)
@@ -127,11 +128,12 @@ Undo (`Ctrl+Z`) works word by word.
 
 ## The Story Bible
 
-The Story Bible keeps **character** and **location** sheets and connects them to your writing.
+The Story Bible keeps **character**, **location**, **faction** and **item** sheets and connects them to your writing.
 
 ![A character entry](images/story-bible.png)
 
-**Create** an entry with **Insert → New Character** (`Ctrl+Alt+C`) / **New Location** (`Ctrl+Alt+L`), or
+**Create** an entry with **Insert → New Character** (`Ctrl+Alt+C`) / **New Location** (`Ctrl+Alt+L`) /
+**New Faction** (`Ctrl+Alt+F`) / **New Item** (`Ctrl+Alt+I`), or
 straight from your writing:
 
 - In a **script**, right-click a character cue or a scene heading → **Add “MARA” in Story Bible**
@@ -232,6 +234,54 @@ The side panel on the right (**View → Toggle Side Panel**, `Ctrl+Alt+\`) has t
 
 Press `Ctrl+Shift+I` anywhere, type the idea, and press `Ctrl+Enter`. It's added with the date and time to the
 project's **Idea Inbox** note (created if the project doesn't have one yet).
+
+## Running a tabletop campaign
+
+Screenwriter doubles as a game master's notebook. Choose **New Campaign** on the start screen (or
+**Tabletop campaign** in **File → New Project…**) and the project starts with:
+
+- **Campaign**: an overview (pitch, tone, safety tools, the party, house rules), World Lore and Random Tables.
+- **Sessions**, with *Session 1* ready to prep, and **Adventures**.
+- **Player Characters**, **NPCs**, **Locations**, **Factions** and **Items & Treasure**. New Story Bible entries
+  land in the matching folder, and their names are highlighted wherever you mention them. An NPC's
+  *Appears in* lists every session note they turn up in.
+- **Maps & Relationships**: a board for who knows whom.
+
+**Sessions.** **Insert → New Session** (`Ctrl+Alt+E`) adds the next numbered session from a prep template:
+recap, strong start, scenes, secrets & clues, NPCs & places, treasure. Write what happens at the table under
+*What happened*, and the next session's **Recap** is filled in from it.
+
+**Secrets.** Keep GM-only material next to what players may see:
+
+```markdown
+GM: the innkeeper is a spy for the Zhentarim.      ← a paragraph starting "GM:" (or "Secret:")
+
+## The duke's real plan (GM)                        ← a heading marked (GM): its whole section
+```
+
+Secret text is shaded violet in the editor; the **GM Only** button on the format bar adds or removes `GM:`.
+`[[Notes]]` stay private as always.
+
+**Player handouts.** **File → Export…** offers **Player handout** (PDF or Markdown) for notes, chapters, folders
+and Story Bible entries: the same text with every secret and note left out. An NPC, place or item exports as
+a clean card with its name, what it is, its description and notes — handy to share after they meet it.
+
+**Dice.** Dice written anywhere in prose or notes — `d20`, `2d6+3`, `8d6`, `4d6kh3` (keep the highest three),
+`2d20kh1` (advantage), `2d20kl1` (disadvantage), `d%` — are shown in blue. `Ctrl`-click one to roll it. The
+**Dice** side panel (**View → Dice Roller**, `Ctrl+Alt+0`) has quick dice, advantage and disadvantage, a box
+for any roll, and a log of what you've rolled, with natural 20s and 1s called out.
+
+**Random tables.** A table whose first column is headed by a die can be rolled on:
+
+```markdown
+| d6  | Rumour                  |
+|-----|-------------------------|
+| 1–2 | The well is poisoned.   |
+| 3   | A dragon was seen.      |
+| 4–6 | The mayor is missing.   |
+```
+
+`Ctrl`-click the `d6`, or right-click anywhere in the table → **Roll on “…”**; the Dice panel shows the row.
 
 ## History and versions
 
@@ -379,6 +429,7 @@ Select what to export in the binder and choose **File → Export…** (`Ctrl+E`)
 | A chapter or note | **PDF** · **Word** (`.docx`) · **Markdown** |
 | A folder | the folder's prose documents **compiled in binder order**, as PDF, Word or Markdown |
 | A board | **PNG** image or **PDF** |
+| A Story Bible entry, or anything with GM secrets | also a **Player handout** (PDF or Markdown) without them |
 
 - **Screenplay PDF**: Courier 12pt with industry margins and indents, a title page from the `Title:` lines,
   page numbers from page 2, scene headings never stranded at the bottom of a page, and `(MORE)` / `(CONT'D)`
@@ -435,6 +486,8 @@ press the key you want, or let go, and it disappears. With `Alt` it also shows t
 | Prose document / Screenplay / Note | `Ctrl+N` / `Ctrl+Alt+N` / `Ctrl+Shift+J` |
 | Board / Folder | `Ctrl+Alt+B` / `Ctrl+Shift+G` |
 | Character / Location | `Ctrl+Alt+C` / `Ctrl+Alt+L` |
+| Faction / Item | `Ctrl+Alt+F` / `Ctrl+Alt+I` |
+| Next session (campaigns) | `Ctrl+Alt+E` |
 | Capture an idea | `Ctrl+Shift+I` |
 | Comment on the selection | `Ctrl+Shift+M` |
 | **Editing** | |
@@ -449,6 +502,7 @@ press the key you want, or let go, and it disappears. With `Alt` it also shows t
 | Split right / down / unsplit | `Ctrl+Alt+R` / `Ctrl+Alt+D` / `Ctrl+Alt+W` |
 | Move tab / focus the other side | `Ctrl+Alt+M` / `F6` |
 | Outline / Corkboard | `Ctrl+Shift+O` / `Ctrl+Alt+K` |
+| Dice roller | `Ctrl+Alt+0` |
 | Binder / side panel | `Ctrl+\` / `Ctrl+Alt+\` |
 | Focus mode | `Ctrl+Shift+D` |
 | Zoom in / out | `Ctrl++` / `Ctrl+-` |
