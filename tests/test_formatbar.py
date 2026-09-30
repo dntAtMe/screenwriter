@@ -158,3 +158,21 @@ def test_centered_section_synopsis(script):
     assert ed.text() == "# the end\n"
     press(bar, "Synopsis")
     assert ed.text() == "= the end\n"
+
+
+def test_gm_only_button_toggles_the_prefix(qapp):
+    from screenwriter.editors.prose import ProseEditor
+    from screenwriter.formatbar import FormatBar
+
+    editor = ProseEditor()
+    editor.set_text("The innkeeper is a spy.")
+    bar = FormatBar()
+    bar.set_editor(editor)
+    gm = next(a for a in bar.actions() if a.text() == "GM Only")
+    assert gm.isVisible()
+    gm.trigger()
+    assert editor.text() == "GM: The innkeeper is a spy."
+    gm.trigger()
+    assert editor.text() == "The innkeeper is a spy."
+    editor.deleteLater()
+    bar.deleteLater()

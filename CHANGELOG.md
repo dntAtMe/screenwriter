@@ -18,6 +18,10 @@ All notable changes to Screenwriter are listed here. The format follows
   strong start, scenes, secrets & clues, NPCs, treasure — and fills its recap from what you noted during
   the last one.
 - Notes are now searched for Story Bible names too, so an NPC's *Appears in* lists the sessions they were in.
+- **GM-only secrets.** Start a paragraph with `GM:` (or the new **GM Only** button), or mark a heading `(GM)`
+  to keep its whole section secret. Secret text gets a faint violet wash in the editor.
+- **Player handouts.** Export offers *Player handout* (PDF or Markdown) for notes, prose, folders and Story Bible
+  entries, leaving out GM-only passages, `[[notes]]` and private fields — an NPC exports as a clean card.
 
 ### Changed
 - **A new look.** Calm, modern styling in light and dark: soft panel colours, rounded selection, pill-shaped

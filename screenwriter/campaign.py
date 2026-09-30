@@ -64,6 +64,9 @@ LORE = """# World Lore
 
 ## History
 
+## What really happened (GM)
+Headings marked (GM) and paragraphs starting "GM:" are shaded, and left out of player handouts.
+
 ## Gods & powers
 
 ## Calendar & holidays
@@ -94,7 +97,7 @@ What's going on before the party arrives, and what happens if they do nothing.
 
 ## Locations
 
-## Villain & plan
+## Villain & plan (GM)
 
 ## Rewards
 """

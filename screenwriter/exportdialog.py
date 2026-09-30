@@ -11,7 +11,8 @@ from .board import Board
 from .marks import strip_marks
 from .export import Format
 from .export import manuscript, screenplay
-from .project import BOARD, FOLDER, NOTE, PROSE, SCREENPLAY, Node, Project, walk
+from . import bible, secrets
+from .project import BIBLE_KINDS, BOARD, FOLDER, NOTE, PROSE, SCREENPLAY, Node, Project, walk
 
 
 def export_formats(project: Project, node: Node, text_of) -> tuple[str, list[Format]]:
@@ -41,19 +42,59 @@ def export_formats(project: Project, node: Node, text_of) -> tuple[str, list[For
     if node.kind == FOLDER:
         docs = [(n.title, text_of(n)) for n in walk(node.children) if n.kind == PROSE]
         what = f"Folder “{node.title}” ({len(docs)} prose document{'s' if len(docs) != 1 else ''}, compiled in binder order)"
+        handout = [(n.title, _handout_text(n, text_of(n))) for n in walk(node.children) if n.kind in HANDOUT_KINDS]
     elif node.kind in (PROSE, NOTE):
         docs = [(node.title, text_of(node))]
         what = f"“{node.title}”"
+        handout = [(node.title, _handout_text(node, text_of(node)))]
+    elif node.kind in BIBLE_KINDS:
+        docs, what = [], f"{bible.LABELS[node.kind]} “{node.title}”"
+        handout = [(node.title, _handout_text(node, text_of(node)))]
     else:
         return "", []
     md = manuscript.compile_markdown(docs) if docs else ""
-    if not md.strip():
-        return what, []
-    return what, [
-        Format("PDF", "pdf", True, lambda p, paper: manuscript.write_pdf(md, p, paper, node.title)),
-        Format("Word (.docx, manuscript format)", "docx", False, lambda p, paper: manuscript.write_docx(md, p, node.title)),
-        Format("Markdown (.md)", "md", False, lambda p, paper: manuscript.write_markdown(md, p)),
-    ]
+    formats = []
+    if md.strip():
+        formats += [
+            Format("PDF", "pdf", True, lambda p, paper: manuscript.write_pdf(md, p, paper, node.title)),
+            Format("Word (.docx, manuscript format)", "docx", False, lambda p, paper: manuscript.write_docx(md, p, node.title)),
+            Format("Markdown (.md)", "md", False, lambda p, paper: manuscript.write_markdown(md, p)),
+        ]
+    # a player handout when there's something to keep from players, or it's a bible entry (an NPC card)
+    hidden = sum(secrets.count_secrets(text_of(n)) for n in _handout_nodes(node))
+    if handout and (hidden or node.kind in BIBLE_KINDS or any(n.kind in BIBLE_KINDS for n in _handout_nodes(node))):
+        player_md = manuscript.compile_markdown([(t, x) for t, x in handout if x.strip()])
+        if player_md.strip():
+            left_out = f" — {hidden} GM-only passage{'s' if hidden != 1 else ''} left out" if hidden else ""
+            formats += [
+                Format(f"Player handout, PDF{left_out}", "pdf", True,
+                       lambda p, paper: manuscript.write_pdf(player_md, p, paper, node.title), " (players)"),
+                Format(f"Player handout, Markdown{left_out}", "md", False,
+                       lambda p, paper: manuscript.write_markdown(player_md, p), " (players)"),
+            ]
+    return what, formats
+
+
+HANDOUT_KINDS = (PROSE, NOTE, *BIBLE_KINDS)
+
+
+def _handout_nodes(node: Node) -> list[Node]:
+    return [n for n in walk([node]) if n.kind in HANDOUT_KINDS]
+
+
+def _handout_text(node: Node, text: str) -> str:
+    """What players may see of a document: a bible entry as a card (name, what it is,
+    its description and notes), GM-only passages and notes left out."""
+    if node.kind not in BIBLE_KINDS:
+        return secrets.player_copy(text)
+    fields, notes = bible.parse_entry(text)
+    lines = [f"# {fields.get('name') or node.title}"]
+    what = " · ".join(v for k in ("role", "type", "rarity") if (v := fields.get(k, "").strip()))
+    if what:
+        lines.append(f"*{what}*")
+    if description := fields.get("description", "").strip():
+        lines.append(description)
+    return "\n\n".join(lines) + "\n\n" + secrets.player_copy(notes)
 
 
 class ExportDialog(QDialog):
@@ -98,7 +139,7 @@ def run_export(parent, project: Project, node: Node, text_of) -> str | None:
     what, formats = export_formats(project, node, text_of)
     if not formats:
         QMessageBox.information(parent, "Export", f"Nothing to export in {what or 'this item'}.\n"
-                                "Select a screenplay, a prose document, a board or a folder of chapters.")
+                                "Select a screenplay, a prose document, a note, a board, a Story Bible entry or a folder.")
         return None
     dialog = ExportDialog(what, formats, parent)
     if not dialog.exec():
@@ -106,7 +147,7 @@ def run_export(parent, project: Project, node: Node, text_of) -> str | None:
     fmt, paper = dialog.format(), dialog.paper()
     settings = QSettings()
     folder = settings.value("export/folder", str(Path.home() / "Documents"))
-    suggested = str(Path(folder) / f"{node.title}.{fmt.extension}")
+    suggested = str(Path(folder) / f"{node.title}{fmt.suffix}.{fmt.extension}")
     path, _ = QFileDialog.getSaveFileName(parent, "Export", suggested, f"{fmt.label} (*.{fmt.extension})")
     if not path:
         return None

@@ -15,6 +15,7 @@ from ..bible import LABELS, BibleIndex
 from .. import fonts
 from ..fountain import OutlineItem
 from ..marks import MARK_RE
+from .. import secrets
 from .biblemenu import add_bible_menu, add_mark_menu
 from .spellmenu import add_comment_action, add_spelling_menu
 from .common import (
@@ -66,6 +67,13 @@ class MarkdownHighlighter(QSyntaxHighlighter):
         self.spell = None  # the SpellService, set by the window
 
     def highlightBlock(self, text: str) -> None:
+        state, secret = secrets.step(max(self.previousBlockState(), 0), text)
+        self.setCurrentBlockState(state)
+        self._highlight(text)
+        if secret:
+            shade_secret(self, text)
+
+    def _highlight(self, text: str) -> None:
         heading = re.match(r"^(#{1,6})\s", text)
         if heading:
             level = len(heading.group(1))
@@ -87,6 +95,28 @@ class MarkdownHighlighter(QSyntaxHighlighter):
         mark_bible_names(self, text, self.bible)
         underline_misspelled(self, text, self.spell)
         highlight_comments(self, text)
+
+
+SECRET_COLOR = "#7c5cc4"  # GM-only text (see secrets.py)
+
+
+def shade_secret(highlighter, text: str) -> None:
+    """A faint violet wash behind a GM-only line, under any name tint or comment."""
+    from .. import theme
+
+    colour = QColor(SECRET_COLOR)
+    colour.setAlphaF(0.16 if theme.is_dark() else 0.09)
+    for i in range(len(text)):
+        f = highlighter.format(i)
+        if f.background().style() == Qt.BrushStyle.NoBrush:
+            f.setBackground(colour)
+            highlighter.setFormat(i, 1, f)
+    if span := secrets.marker(text):
+        for i in range(*span):
+            f = highlighter.format(i)
+            f.setForeground(QColor(SECRET_COLOR))
+            f.setFontWeight(QFont.Weight.DemiBold)
+            highlighter.setFormat(i, 1, f)
 
 
 HEADING_RE = re.compile(r"^(#{1,6})\s+(.*)")

@@ -12,3 +12,4 @@ class Format:
     extension: str
     paper: bool  # offers Letter / A4
     run: Callable[..., None]  # run(path, paper)
+    suffix: str = ""  # added to the suggested file name: "Session 3 (players).pdf"

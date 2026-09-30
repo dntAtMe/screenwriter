@@ -23,6 +23,7 @@ HEADING_MARK_RE = re.compile(r"^#{1,6}\s*")
 QUOTE_MARK_RE = re.compile(r"^>\s?")
 SCRIPT_MARK_RE = re.compile(r"^(#{1,6}|=(?!==))\s*")  # a script line is a section or a synopsis
 CENTERED_RE = re.compile(r"^>\s*(.*?)\s*<$")
+SECRET_MARK_RE = re.compile(r"^(?:gm|secret)\s*:\s?", re.IGNORECASE)
 
 ELEMENT_LABELS = {
     El.SCENE: "Scene",
@@ -204,6 +205,8 @@ class FormatBar(QToolBar):
             self._add("Quote", "Quotation — > at the start of the line",
                       lambda: self._edit(lambda c: toggle_line_prefix(c, "> ", QUOTE_MARK_RE))),
             self._add("Scene Break", "Scene break — a *** line", lambda: self._edit(insert_scene_break)),
+            self._add("GM Only", "GM only — GM: at the start of a paragraph; left out of player handouts",
+                      lambda: self._edit(lambda c: toggle_line_prefix(c, "GM: ", SECRET_MARK_RE))),
         ]
         self.script_only += [
             self._add("Section", "Section — # Act One (for structure; not printed)",
