@@ -1,5 +1,6 @@
 import html
 import re
+from contextlib import contextmanager
 
 from PySide6.QtCore import QEvent, QObject, QTimer
 from PySide6.QtGui import QFontDatabase, QPalette, QTextCursor
@@ -90,10 +91,11 @@ def update_name_hover(editor, highlighter, index, pos) -> None:
         return
     highlighter.hover = span
     doc = editor.document()
-    for s in {old, span} - {None}:
-        block = doc.findBlockByNumber(s[0])
-        if block.isValid():
-            highlighter.rehighlightBlock(block)
+    with quiet(editor):
+        for s in {old, span} - {None}:
+            block = doc.findBlockByNumber(s[0])
+            if block.isValid():
+                highlighter.rehighlightBlock(block)
 
 
 COMMENT_TINT = (240, 200, 60)  # a soft yellow behind commented text
@@ -222,14 +224,21 @@ def show_link_tip(editor, e, titles: dict[str, str]) -> bool:
     return True
 
 
-def quiet_rehighlight(editor) -> None:
-    """Re-colour an editor's text (new names, links, theme) without it looking like an edit:
-    the editor would otherwise say textChanged, and the document would count as unsaved."""
+@contextmanager
+def quiet(editor):
+    """Re-colouring text (a highlighter pass) makes the editor say textChanged, so the
+    document would look unsaved; inside this, it doesn't."""
     blocked = editor.blockSignals(True)
     try:
-        editor.highlighter.rehighlight()
+        yield
     finally:
         editor.blockSignals(blocked)
+
+
+def quiet_rehighlight(editor) -> None:
+    """Re-colour all of an editor's text (names, links, spelling, theme) without it looking like an edit."""
+    with quiet(editor):
+        editor.highlighter.rehighlight()
 
 
 class Typewriter(QObject):

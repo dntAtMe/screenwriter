@@ -51,6 +51,7 @@ from .common import (
     format_links,
     link_at,
     mark_bible_names,
+    quiet,
     quiet_rehighlight,
     show_link_tip,
     update_name_hover,
@@ -329,10 +330,11 @@ class ScreenplayEditor(TextDocumentAPI, QTextEdit):
     def _refresh_blocks(self, *numbers: int) -> None:
         """Re-classify blocks whose element depends on the cursor or on the next line."""
         doc = self.document()
-        for n in sorted(set(numbers)):
-            block = doc.findBlockByNumber(n)
-            if block.isValid():
-                self.highlighter.rehighlightBlock(block)
+        with quiet(self):  # formats only
+            for n in sorted(set(numbers)):
+                block = doc.findBlockByNumber(n)
+                if block.isValid():
+                    self.highlighter.rehighlightBlock(block)
 
     def _refresh_around_cursor(self) -> None:
         n = self.textCursor().blockNumber()

@@ -725,19 +725,40 @@ def test_documents_reopen_where_you_were(qapp, sample_project):
     dispose(w)
 
 
-def test_opening_a_script_does_not_mark_it_unsaved(qapp, sample_project):
-    from PySide6.QtCore import QSettings
+def test_nothing_but_typing_marks_a_tab_unsaved(qapp, sample_project):
+    """Opening, spelling squiggles, a script's layout, moving about and hovering names only
+    re-colour the text: no tab may show the unsaved dot for them."""
+    from PySide6.QtCore import QEventLoop, QPoint, QSettings, QTimer
+    from PySide6.QtGui import QTextCursor
 
+    from screenwriter.editors.common import update_name_hover
     from screenwriter.mainwindow import UNSAVED_DOT, MainWindow
 
     QSettings().clear()
     w = MainWindow()
+    w.resize(1100, 700)
     w.show()
     w.open_project(sample_project)
-    w.open_document("pilot")
-    editor = w.editors["pilot"]
-    editor._layout_timer.timeout.emit()  # the layout pass after opening
-    editor._refresh_timer.timeout.emit()
-    qapp.processEvents()
-    assert not w.tabs.tabText(w.tabs.indexOf(editor)).endswith(UNSAVED_DOT)
+    docs = ["ch01", "ch02", "pilot", "characters"]
+    for doc in docs:
+        w.open_document(doc)
+    w.bible_timer.timeout.emit()
+    w.spell_redraw.timeout.emit()
+    pilot = w.editors["pilot"]
+    pilot._layout_timer.timeout.emit()
+    pilot._refresh_timer.timeout.emit()
+    pilot.setTextCursor(QTextCursor(pilot.document().findBlockByNumber(3)))
+    ch01 = w.editors["ch01"]
+    for y in range(0, ch01.viewport().height(), 12):  # the mouse passes over names
+        update_name_hover(ch01, ch01.highlighter, ch01.bible, QPoint(80, y))
+    update_name_hover(ch01, ch01.highlighter, ch01.bible, None)
+    loop = QEventLoop()
+    QTimer.singleShot(300, loop.quit)
+    loop.exec()
+    for doc in docs:
+        editor = w.editors[doc]
+        assert not getattr(editor, "unsaved", False), doc
+        assert not w.tabs.tabText(w.tabs.indexOf(editor)).endswith(UNSAVED_DOT), doc
+    ch01.textCursor().insertText("Typed. ")  # (and typing still does)
+    assert w.tabs.tabText(w.tabs.indexOf(ch01)).endswith(UNSAVED_DOT)
     dispose(w)

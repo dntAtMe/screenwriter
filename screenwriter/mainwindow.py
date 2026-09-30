@@ -68,7 +68,7 @@ from .search import FindBar, SearchPanel
 from .editors.prose import ProseEditor
 from .editors.screenplay import ScreenplayEditor
 from .editors import screenplay
-from .editors.common import Typewriter
+from .editors.common import Typewriter, quiet_rehighlight
 from .fountain import EL_NAMES
 from .project import BIBLE_KINDS, BOARD, CHARACTER, DOCUMENT_KINDS, LOCATION, FOLDER, NOTE, PROSE, SCREENPLAY, TRASH, Project, walk
 
@@ -1548,7 +1548,7 @@ class MainWindow(QMainWindow):
             if isinstance(editor, BibleEditor):
                 editor = editor.notes
             if isinstance(editor, (ProseEditor, ScreenplayEditor)):
-                editor.highlighter.rehighlight()
+                quiet_rehighlight(editor)  # new squiggles aren't an edit
 
     # --- people ---------------------------------------------------------------------------
 
