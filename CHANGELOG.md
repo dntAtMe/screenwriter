@@ -6,6 +6,8 @@ All notable changes to Screenwriter are listed here. The format follows
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-10-01
+
 ### Added
 - **New version notice.** Once a day Screenwriter checks for a newer release and, if there is one, shows an
   **Update to …** button in the header (and a line on the start screen) with what's new and a download link;
@@ -195,7 +197,8 @@ The first release.
 - Packages for macOS (`.dmg`), Windows (installer and portable `.zip`) and Linux (`.AppImage`, `.tar.gz`).
 - Released under the MIT License.
 
-[Unreleased]: https://github.com/dntAtMe/screenwriter/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/dntAtMe/screenwriter/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/dntAtMe/screenwriter/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/dntAtMe/screenwriter/compare/v0.7.0...v1.0.0
 [0.7.0]: https://github.com/dntAtMe/screenwriter/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/dntAtMe/screenwriter/compare/v0.5.0...v0.6.0
