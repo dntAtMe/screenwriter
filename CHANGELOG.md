@@ -12,6 +12,10 @@ All notable changes to Screenwriter are listed here. The format follows
   a version can be skipped. **Help ▸ Check for Updates…** checks straight away, and the automatic check can be
   turned off. Only GitHub's public release list is fetched.
 
+### Fixed
+- HTTPS requests (the new-version check, Google Drive) check certificates against a list that ships with the
+  app, so they work in the packaged app on every system, not only where Python finds the system's list.
+
 ## [1.0.0] - 2026-10-01
 
 Screenwriter 1.0: a new look throughout, and a round of everyday comforts — switch projects from the header,

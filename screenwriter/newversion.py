@@ -16,7 +16,7 @@ from dataclasses import dataclass
 
 from PySide6.QtCore import QObject, Signal
 
-from . import REPOSITORY, __version__
+from . import REPOSITORY, __version__, net
 
 LATEST_URL = "https://api.github.com/repos/" + REPOSITORY.split("github.com/", 1)[1] + "/releases/latest"
 DAY = 24 * 60 * 60
@@ -59,7 +59,7 @@ def fetch_latest(timeout: float = 15) -> Release | None:
         "Accept": "application/vnd.github+json",
         "User-Agent": f"Screenwriter/{__version__}",
     })
-    with urllib.request.urlopen(request, timeout=timeout) as response:
+    with net.urlopen(request, timeout=timeout) as response:
         return parse_release(json.loads(response.read().decode("utf-8")))
 
 

@@ -62,6 +62,8 @@ def main() -> None:
                 log(f"{APP_NAME} {__version__} started; project: {window.project.name if window.project else None}")
                 if (folder := os.environ.get("SCREENWRITER_SMOKE_EXPORT")) and window.project:
                     smoke_export(window, Path(folder))
+                if url := os.environ.get("SCREENWRITER_SMOKE_HTTPS"):
+                    smoke_https(url)
             except Exception as e:  # fail loudly, but never hang
                 log(f"smoke test failed: {e!r}")
                 app.exit(1)
@@ -71,6 +73,16 @@ def main() -> None:
         QTimer.singleShot(1500, report)
 
     sys.exit(app.exec())
+
+
+def smoke_https(url: str) -> None:
+    """Prove the packaged app can make a verified HTTPS request (update check, Google Drive)."""
+    import urllib.request
+
+    from . import net
+
+    with net.urlopen(urllib.request.Request(url, method="HEAD"), timeout=30) as response:
+        log(f"https ok: {url} → {response.status}")
 
 
 def smoke_export(window: MainWindow, folder: Path) -> None:

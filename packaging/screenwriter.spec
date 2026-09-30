@@ -16,7 +16,7 @@ a = Analysis(
     datas=[
         (str(ROOT / "screenwriter" / "resources"), "screenwriter/resources"),
         (str(ROOT / "LICENSE"), "."),
-    ] + collect_data_files("docx"),
+    ] + collect_data_files("docx") + collect_data_files("certifi"),  # certifi: HTTPS certificates (net.py)
     excludes=["tkinter", "PySide6.QtQml", "PySide6.QtQuick", "PySide6.QtTest"],  # QtNetwork: Google sign-in
     noarchive=False,
 )

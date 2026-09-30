@@ -27,6 +27,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
+from . import net
+
 AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 REVOKE_URL = "https://oauth2.googleapis.com/revoke"
@@ -51,7 +53,7 @@ class DriveError(Exception):
 def urllib_http(method: str, url: str, headers: dict, body: bytes | None) -> tuple[int, dict, bytes]:
     request = urllib.request.Request(url, data=body, method=method, headers=headers)
     try:
-        with urllib.request.urlopen(request, timeout=60) as response:
+        with net.urlopen(request, timeout=60) as response:
             return response.status, dict(response.headers), response.read()
     except urllib.error.HTTPError as e:
         return e.code, dict(e.headers), e.read()

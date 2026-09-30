@@ -68,16 +68,16 @@ jobs:
       # Start the packaged app on the sample project and export every format.
       - name: Smoke test (macOS)
         if: runner.os == 'macOS'
-        env: { SCREENWRITER_SMOKE_TEST: "1", SCREENWRITER_SMOKE_EXPORT: build/smoke, QT_QPA_PLATFORM: offscreen }
+        env: { SCREENWRITER_SMOKE_TEST: "1", SCREENWRITER_SMOKE_EXPORT: build/smoke, SCREENWRITER_SMOKE_HTTPS: "https://github.com", QT_QPA_PLATFORM: offscreen }
         run: dist/Screenwriter.app/Contents/MacOS/Screenwriter "examples/The Lighthouse" && ls build/smoke | tee /dev/stderr | grep -q pilot-final.fdx
       - name: Smoke test (Linux)
         if: runner.os == 'Linux'
-        env: { SCREENWRITER_SMOKE_TEST: "1", SCREENWRITER_SMOKE_EXPORT: build/smoke, QT_QPA_PLATFORM: offscreen }
+        env: { SCREENWRITER_SMOKE_TEST: "1", SCREENWRITER_SMOKE_EXPORT: build/smoke, SCREENWRITER_SMOKE_HTTPS: "https://github.com", QT_QPA_PLATFORM: offscreen }
         run: dist/Screenwriter/Screenwriter "examples/The Lighthouse" && ls build/smoke | tee /dev/stderr | grep -q pilot-final.fdx
       - name: Smoke test (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
-        env: { SCREENWRITER_SMOKE_TEST: "1", SCREENWRITER_SMOKE_EXPORT: build\smoke, QT_QPA_PLATFORM: offscreen, QT_QPA_FONTDIR: 'C:\Windows\Fonts' }
+        env: { SCREENWRITER_SMOKE_TEST: "1", SCREENWRITER_SMOKE_EXPORT: build\smoke, SCREENWRITER_SMOKE_HTTPS: "https://github.com", QT_QPA_PLATFORM: offscreen, QT_QPA_FONTDIR: 'C:\Windows\Fonts' }
         run: |
           $p = Start-Process -FilePath dist\Screenwriter\Screenwriter.exe -ArgumentList '"examples\The Lighthouse"' -Wait -PassThru
           if ($p.ExitCode -ne 0) { throw "app exited with $($p.ExitCode)" }
